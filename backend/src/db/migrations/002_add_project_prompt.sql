@@ -1,0 +1,2 @@
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS initial_prompt TEXT DEFAULT '';
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS generation_status VARCHAR(20) DEFAULT 'idle';

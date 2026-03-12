@@ -1,0 +1,11 @@
+import client from './client'
+
+export const aiApi = {
+  generateAll: (pid, prompt) => client.post(`/projects/${pid}/generate-all`, { prompt }),
+  generateSection: (pid, section, prompt) => client.post(`/projects/${pid}/generate-section`, { section, prompt }),
+  getGenerationStatus: (pid) => client.get(`/projects/${pid}/generation-status`),
+  getTasks: (pid) => client.get(`/projects/${pid}/ai-tasks`),
+  getTask: (pid, tid) => client.get(`/projects/${pid}/ai-tasks/${tid}`),
+  compileMaterial: (pid) => client.post(`/projects/${pid}/material/compile`),
+  getMaterial: (pid) => client.get(`/projects/${pid}/material`)
+}
