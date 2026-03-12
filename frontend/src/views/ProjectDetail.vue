@@ -27,8 +27,14 @@ const regenPrompt = ref('')
 const regenerating = ref(false)
 
 const dataVersion = ref(0)
+const sectionCompleteCallback = ref(null)
 provide('dataVersion', dataVersion)
 provide('refreshParentStatus', () => checkStatus())
+provide('startParentPolling', (onComplete) => {
+  sectionCompleteCallback.value = onComplete || null
+  genStatus.value = 'generating'
+  startPolling()
+})
 
 const tabs = [
   { label: '基础信息', value: 'basic-info' },
@@ -72,9 +78,14 @@ async function checkStatus() {
     if (res.status === 'completed') {
       stopPolling()
       await projectStore.fetchProject(route.params.id)
+      if (sectionCompleteCallback.value) {
+        await sectionCompleteCallback.value()
+        sectionCompleteCallback.value = null
+      }
       toast.success('AI 物料生成完成')
     } else if (res.status === 'failed') {
       stopPolling()
+      sectionCompleteCallback.value = null
       await projectStore.fetchProject(route.params.id)
     }
   } catch { /* ignore */ }
@@ -181,7 +192,7 @@ watch(() => route.params.id, async (id) => {
         @regenerate="showRegenModal = true"
       />
 
-      <VTabs :tabs="tabs" :model-value="currentTab" @update:model-value="switchTab" />
+      <VTabs :tabs="tabs" :model-value="currentTab" :disabled="isGenerating" @update:model-value="switchTab" />
 
       <div class="project-content">
         <router-view :generation-status="genStatus" />

@@ -3,10 +3,11 @@ import { ref, watch, nextTick, onMounted } from 'vue'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
-  tabs: { type: Array, default: () => [] }
+  tabs: { type: Array, default: () => [] },
+  disabled: { type: Boolean, default: false }
 })
 
-defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue'])
 
 const tabsRef = ref(null)
 const indicatorStyle = ref({})
@@ -22,18 +23,24 @@ function updateIndicator() {
   }
 }
 
+function handleClick(val) {
+  if (props.disabled) return
+  emit('update:modelValue', val)
+}
+
 watch(() => props.modelValue, () => nextTick(updateIndicator))
 onMounted(() => nextTick(updateIndicator))
 </script>
 
 <template>
-  <div class="v-tabs" ref="tabsRef">
+  <div class="v-tabs" :class="{ 'v-tabs--disabled': disabled }" ref="tabsRef">
     <button
       v-for="tab in tabs"
       :key="tab.value ?? tab"
       class="v-tabs__item"
       :class="{ 'v-tabs__item--active': modelValue === (tab.value ?? tab) }"
-      @click="$emit('update:modelValue', tab.value ?? tab)"
+      :disabled="disabled"
+      @click="handleClick(tab.value ?? tab)"
     >
       {{ tab.label ?? tab }}
     </button>
@@ -58,6 +65,11 @@ onMounted(() => nextTick(updateIndicator))
   display: none;
 }
 
+.v-tabs--disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 .v-tabs__item {
   padding: 10px 16px;
   font-size: 13px;
@@ -71,8 +83,12 @@ onMounted(() => nextTick(updateIndicator))
   flex-shrink: 0;
 }
 
-.v-tabs__item:hover {
+.v-tabs__item:hover:not(:disabled) {
   color: var(--text-secondary);
+}
+
+.v-tabs__item:disabled {
+  cursor: not-allowed;
 }
 
 .v-tabs__item--active {

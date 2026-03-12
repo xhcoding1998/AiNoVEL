@@ -55,7 +55,7 @@ function close() {
 
 .v-modal {
   width: 100%;
-  max-height: calc(100vh - var(--space-6) * 2);
+  max-height: calc(80vh - var(--space-6) * 2);
   display: flex;
   flex-direction: column;
   background: var(--bg-tertiary);

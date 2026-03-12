@@ -23,6 +23,7 @@ export function useAIRegenerate() {
   const regenPrompt = ref('')
   const regenerating = ref(false)
   const refreshParent = inject('refreshParentStatus', null)
+  const startParentPolling = inject('startParentPolling', null)
 
   const showConfirmModal = ref(false)
   const pendingRegenSection = ref(null)
@@ -74,24 +75,9 @@ export function useAIRegenerate() {
       showRegenInput.value = false
       regenPrompt.value = ''
 
-      const maxAttempts = 60
-      for (let i = 0; i < maxAttempts; i++) {
-        await new Promise(r => setTimeout(r, 2500))
-        const res = await aiApi.getGenerationStatus(projectId)
-        if (res.status === 'completed') {
-          toast.success('重新生成完成')
-          if (onComplete) await onComplete()
-          if (refreshParent) refreshParent()
-          return
-        }
-        if (res.status === 'failed') {
-          toast.error('生成失败，请检查 AI 配置')
-          if (refreshParent) refreshParent()
-          return
-        }
+      if (startParentPolling) {
+        startParentPolling(onComplete)
       }
-      toast.warning('生成超时，请刷新页面查看')
-      if (refreshParent) refreshParent()
     } catch (err) {
       toast.error(err?.error || '生成失败')
       if (refreshParent) refreshParent()
