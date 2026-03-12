@@ -1,11 +1,10 @@
 import { ref, computed, unref } from 'vue'
-import dagre from '@dagrejs/dagre'
 
 const CHAR_WIDTH = 8
-const MIN_NODE_WIDTH = 80
+const MIN_NODE_WIDTH = 90
 const MAX_NODE_WIDTH = 180
 const NODE_HEIGHT = 48
-const PADDING_H = 28
+const PADDING_H = 32
 const MAX_LABEL_LEN = 12
 
 function measureNodeWidth(name) {
@@ -25,108 +24,136 @@ const ROLE_RANK = {
   antagonist: 2
 }
 
-/**
- * 为关系网络图构建分层提示。
- * dagre 是 DAG 布局引擎，对网状结构容易坍塌为一行。
- * 策略：按角色类型分层 + 引入隐形层级边辅助 dagre 分层。
- */
-function assignRanks(chars) {
-  const groups = {}
-  for (const c of chars) {
-    const rank = ROLE_RANK[c.role_type] ?? 1
-    ;(groups[rank] ??= []).push(c)
-  }
-  return groups
-}
-
 export function useGraph(charactersFn, relationsFn) {
   const graphData = ref({ nodes: [], edges: [] })
 
   function layout() {
-    const g = new dagre.graphlib.Graph({ multigraph: true })
-    g.setGraph({
-      rankdir: 'TB',
-      nodesep: 80,
-      ranksep: 100,
-      marginx: 40,
-      marginy: 40,
-      ranker: 'network-simplex'
-    })
-    g.setDefaultEdgeLabel(() => ({}))
-
     const chars = (typeof charactersFn === 'function' ? charactersFn() : unref(charactersFn)) || []
     const rels = (typeof relationsFn === 'function' ? relationsFn() : unref(relationsFn)) || []
 
-    chars.forEach(c => {
-      const w = measureNodeWidth(c.name)
-      g.setNode(String(c.id), {
-        label: c.name,
-        displayLabel: truncateLabel(c.name),
-        width: w,
-        height: NODE_HEIGHT,
-        data: c
-      })
-    })
-
-    rels.forEach(r => {
-      if (!g.hasNode(String(r.from_character_id)) || !g.hasNode(String(r.to_character_id))) return
-      g.setEdge(String(r.from_character_id), String(r.to_character_id), {
-        label: r.relation_type || '',
-        data: r
-      }, `rel_${r.id || Math.random()}`)
-    })
-
-    const rankGroups = assignRanks(chars)
-    const sortedRanks = Object.keys(rankGroups).map(Number).sort((a, b) => a - b)
-
-    if (sortedRanks.length > 1) {
-      for (let ri = 0; ri < sortedRanks.length - 1; ri++) {
-        const upperGroup = rankGroups[sortedRanks[ri]]
-        const lowerGroup = rankGroups[sortedRanks[ri + 1]]
-        if (upperGroup?.length && lowerGroup?.length) {
-          g.setEdge(
-            String(upperGroup[0].id),
-            String(lowerGroup[0].id),
-            { minlen: 2, weight: 0, label: '', _invisible: true },
-            '_rank_hint_' + ri
-          )
-        }
-      }
+    if (!chars.length) {
+      graphData.value = { nodes: [], edges: [] }
+      return
     }
 
-    dagre.layout(g)
+    // -- Step 1: group characters into layers by role_type --
+    const layers = {}
+    for (const c of chars) {
+      const rank = ROLE_RANK[c.role_type] ?? 1
+      ;(layers[rank] ??= []).push(c)
+    }
+    const sortedRanks = Object.keys(layers).map(Number).sort((a, b) => a - b)
 
-    const nodes = []
-    g.nodes().forEach(id => {
-      const node = g.node(id)
-      if (node) {
-        nodes.push({
-          id,
-          x: node.x,
-          y: node.y,
-          width: node.width,
-          height: node.height,
-          label: node.label,
-          displayLabel: node.displayLabel,
-          data: node.data
-        })
+    // -- Step 2: compute node positions with forced layering --
+    const LAYER_GAP = 120
+    const NODE_GAP = 100
+    const MARGIN_X = 60
+    const MARGIN_Y = 50
+
+    const maxLayerWidth = Math.max(...sortedRanks.map(r => {
+      const group = layers[r]
+      return group.reduce((sum, c) => sum + measureNodeWidth(c.name) + NODE_GAP, -NODE_GAP)
+    }))
+    const canvasWidth = Math.max(maxLayerWidth + MARGIN_X * 2, 500)
+
+    const nodeMap = {}
+    let currentY = MARGIN_Y
+
+    for (const rank of sortedRanks) {
+      const group = layers[rank]
+      const totalWidth = group.reduce((sum, c) => sum + measureNodeWidth(c.name) + NODE_GAP, -NODE_GAP)
+      let startX = (canvasWidth - totalWidth) / 2
+      const y = currentY + NODE_HEIGHT / 2
+
+      for (const c of group) {
+        const w = measureNodeWidth(c.name)
+        const x = startX + w / 2
+        nodeMap[String(c.id)] = {
+          id: String(c.id),
+          x,
+          y,
+          width: w,
+          height: NODE_HEIGHT,
+          label: c.name,
+          displayLabel: truncateLabel(c.name),
+          data: c
+        }
+        startX += w + NODE_GAP
       }
-    })
+      currentY += NODE_HEIGHT + LAYER_GAP
+    }
 
-    const edges = []
-    g.edges().forEach(e => {
-      const edge = g.edge(e)
-      if (edge._invisible) return
-      edges.push({
-        from: e.v,
-        to: e.w,
-        points: edge.points,
-        label: edge.label,
-        data: edge.data
+    // -- Step 3: build edges with proper curve control points --
+    const edgeList = []
+    const edgeSet = new Set()
+
+    for (const r of rels) {
+      const fromId = String(r.from_character_id)
+      const toId = String(r.to_character_id)
+      if (!nodeMap[fromId] || !nodeMap[toId]) continue
+
+      const key = `${fromId}-${toId}`
+      if (edgeSet.has(key)) continue
+      edgeSet.add(key)
+
+      const fromNode = nodeMap[fromId]
+      const toNode = nodeMap[toId]
+
+      const points = computeEdgePoints(fromNode, toNode)
+
+      edgeList.push({
+        from: fromId,
+        to: toId,
+        points,
+        label: r.relation_type || '',
+        data: r
       })
-    })
+    }
 
-    graphData.value = { nodes, edges }
+    graphData.value = {
+      nodes: Object.values(nodeMap),
+      edges: edgeList
+    }
+  }
+
+  function computeEdgePoints(fromNode, toNode) {
+    const fx = fromNode.x
+    const fy = fromNode.y
+    const tx = toNode.x
+    const ty = toNode.y
+
+    const startY = fy + fromNode.height / 2
+    const endY = ty - toNode.height / 2
+
+    const sameLayer = Math.abs(fy - ty) < 10
+    if (sameLayer) {
+      const midY = fy - 60
+      return [
+        { x: fx, y: fy - fromNode.height / 2 },
+        { x: (fx + tx) / 2, y: midY },
+        { x: tx, y: ty - toNode.height / 2 }
+      ]
+    }
+
+    const goingDown = fy < ty
+    if (goingDown) {
+      const midY = (startY + endY) / 2
+      return [
+        { x: fx, y: startY },
+        { x: fx, y: midY },
+        { x: tx, y: midY },
+        { x: tx, y: endY }
+      ]
+    }
+
+    // reverse edge (going up) — route around
+    const detourX = Math.max(fx, tx) + 80
+    return [
+      { x: fx, y: startY },
+      { x: detourX, y: startY },
+      { x: detourX, y: endY },
+      { x: tx, y: endY }
+    ]
   }
 
   const viewBox = computed(() => {
@@ -142,10 +169,10 @@ export function useGraph(charactersFn, relationsFn) {
     edges.forEach(e => {
       if (e.points) {
         e.points.forEach(p => {
-          minX = Math.min(minX, p.x - 30)
-          minY = Math.min(minY, p.y - 15)
-          maxX = Math.max(maxX, p.x + 30)
-          maxY = Math.max(maxY, p.y + 15)
+          minX = Math.min(minX, p.x - 40)
+          minY = Math.min(minY, p.y - 25)
+          maxX = Math.max(maxX, p.x + 40)
+          maxY = Math.max(maxY, p.y + 25)
         })
       }
     })

@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { useNovelStore } from '../../stores/novel'
 import { useToast } from '../../composables/useToast'
 import { useAIRegenerate } from '../../composables/useAIRegenerate'
+import { useCascadeRegenerate } from '../../composables/useCascadeRegenerate'
 import { aiApi } from '../../api/ai'
 import VButton from '../ui/VButton.vue'
 import VCard from '../ui/VCard.vue'
@@ -23,6 +24,10 @@ const {
   showConfirmModal, affectedSteps,
   requestRegenerate, confirmRegenerate, cancelRegenerate
 } = useAIRegenerate()
+const {
+  showCascadeModal, cascadeAffectedSteps, cascadeStepLabel,
+  cascadeLoading, promptCascade, confirmCascade, cancelCascade
+} = useCascadeRegenerate()
 const pid = route.params.id
 const dataVersion = inject('dataVersion', ref(0))
 const isGenerating = inject('isParentGenerating', ref(false))
@@ -63,6 +68,7 @@ async function saveChar() {
     await store.saveCharacter(pid, editForm.value)
     toast.success('已保存')
     showEditor.value = false
+    promptCascade(pid, 'characters', loadData)
   } catch { toast.error('保存失败') }
   finally { saving.value = false }
 }
@@ -185,6 +191,20 @@ async function aiGenerateChar() {
       @cancel="cancelRegenerate"
     >
       <p>重新生成「角色设定」将覆盖当前所有角色数据，且由于内容链路的依赖关系，此阶段之后的所有内容也可能需要重新生成以保持一致性。</p>
+    </VConfirmModal>
+
+    <VConfirmModal
+      v-model="showCascadeModal"
+      title="是否重新生成后续内容？"
+      confirm-text="重新生成后续"
+      cancel-text="跳过"
+      confirm-variant="primary"
+      :affected-steps="cascadeAffectedSteps"
+      :loading="cascadeLoading"
+      @confirm="confirmCascade"
+      @cancel="cancelCascade"
+    >
+      <p>你修改了「{{ cascadeStepLabel }}」，后续内容依赖此信息。建议重新生成以保持一致性，也可跳过稍后手动处理。</p>
     </VConfirmModal>
   </div>
 </template>

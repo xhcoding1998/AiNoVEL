@@ -124,6 +124,42 @@ ai.post('/:id/stop-generation', async (c) => {
   return c.json({ message: '已停止生成' })
 })
 
+// Cascade regeneration: regenerate all steps AFTER the given step
+ai.post('/:id/regenerate-from', async (c) => {
+  const pid = await verifyProjectOwner(c)
+  if (!pid) return c.json({ error: '项目不存在' }, 404)
+
+  const { after_step } = await c.req.json()
+  const stepIdx = GENERATION_STEPS.indexOf(after_step)
+  if (stepIdx === -1) return c.json({ error: '无效的步骤' }, 400)
+
+  const startIdx = stepIdx + 1
+  if (startIdx >= GENERATION_STEPS.length) {
+    return c.json({ error: '该步骤之后没有需要生成的内容' }, 400)
+  }
+
+  const [proj] = await sql`SELECT generation_status, initial_prompt FROM projects WHERE id = ${pid}`
+  if (proj.generation_status === 'generating') {
+    return c.json({ error: '当前有正在进行的生成任务' }, 400)
+  }
+
+  const userId = c.get('userId')
+  const userConfig = await getUserAIConfig(userId)
+
+  await sql`UPDATE projects SET generation_status = 'generating', updated_at = NOW() WHERE id = ${pid}`
+
+  const stepsToRegen = GENERATION_STEPS.slice(startIdx).map(s => STEP_LABELS[s] || s).join('、')
+  const [task] = await sql`
+    INSERT INTO ai_tasks (project_id, task_type, status, prompt)
+    VALUES (${pid}, ${`cascade_from_${after_step}`}, 'running', ${`用户修改了「${STEP_LABELS[after_step] || after_step}」，级联重新生成：${stepsToRegen}`})
+    RETURNING *
+  `
+
+  processStepByStep(task.id, pid, proj.initial_prompt, userConfig, startIdx).catch(console.error)
+
+  return c.json({ data: task, steps: GENERATION_STEPS.slice(startIdx) })
+})
+
 // Section regeneration
 ai.post('/:id/generate-section', async (c) => {
   const pid = await verifyProjectOwner(c)

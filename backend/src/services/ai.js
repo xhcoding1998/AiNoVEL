@@ -255,15 +255,19 @@ JSON 结构：
 }
 
 function buildRelationsPrompt(userPrompt, existing) {
-  const charNames = existing?.characters?.map(c => c.name) || []
+  const chars = existing?.characters || []
+  const charNames = chars.map(c => c.name)
   const charHint = charNames.length
-    ? `\n\n【当前角色列表】：${charNames.join('、')}\n⚠️ from_name 和 to_name 必须严格使用以上角色名，一个字都不能多不能少。`
+    ? `\n\n【当前角色列表（name → role_type）】：\n${chars.map(c => `  - ${c.name} (${c.role_type})`).join('\n')}\n⚠️ from_name 和 to_name 必须严格使用以上角色名，一个字都不能多不能少。`
     : ''
 
-  // Only include a compact summary of existing material to save tokens
   const compactContext = existing ? buildCompactContext(existing) : ''
 
   return `你是一位人物关系架构师。基于已有角色设定构建人物关系网。
+
+⚠️ 重要：你返回的数据将直接被前端 dagre.js 渲染为有向关系脉络图（从上往下布局）。
+dagre.js 通过 from → to 的有向边来确定节点层级——如果边的方向没有形成层次关系，所有节点会被挤到同一行，图形完全无法阅读。
+因此你必须精心设计每条关系的 from/to 方向，确保生成的图有清晰的上下层级结构。
 
 ${JSON_RULE}
 
@@ -271,8 +275,8 @@ JSON 结构：
 {
   "relations": [
     {
-      "from_name": "角色A名字（必须精确匹配角色列表中的名字）",
-      "to_name": "角色B名字（必须精确匹配角色列表中的名字）",
+      "from_name": "上层角色名字（必须精确匹配角色列表）",
+      "to_name": "下层角色名字（必须精确匹配角色列表）",
       "relation_type": "同盟/敌对/恋人/暗恋/虐恋/亲属/上下级/师徒/挚友/竞争/利用/监视/宿命/对照",
       "faction": "阵营",
       "interest_link": "利益链（50字左右）",
@@ -282,17 +286,27 @@ JSON 结构：
   ]
 }
 
+⚠️⚠️⚠️ dagre.js 布局核心规则（你必须严格遵守）：
+1. 边的方向决定层级：from_name 的节点在上方，to_name 的节点在下方
+2. 你需要把角色分成 3 层来构建关系：
+   - 第 1 层（最上方）：主角（male_lead / female_lead）
+   - 第 2 层（中间）：关键配角（supporting）
+   - 第 3 层（最下方）：反派（antagonist）
+3. 关系方向必须遵循层级：
+   - 第 1 层 → 第 2 层：主角指向配角（如师徒、恋人、挚友）
+   - 第 1 层 → 第 3 层：主角指向反派（如敌对、宿命、竞争）
+   - 第 2 层 → 第 3 层：配角指向反派（如监视、利用、敌对）
+   - 同层之间也可以有关系（如两个配角之间），但至少要保证每个角色有一条跨层边
+4. ⚠️ 绝对不能出现"反向边"（下层 → 上层），否则 dagre 会把图压缩成一行！
+   - 错误示例：反派 → 主角（这会让 dagre 把反派排到主角上面）
+   - 正确做法：主角 → 反派（relation_type 写"宿命"或"敌对"，用 description 补充说明反派对主角的态度）
+5. 每个角色至少要被 1 条边连接到，不能有孤立节点
+
 要求：
-1. 至少 6-10 条关系，覆盖所有主要角色
+1. 至少 8-12 条关系，确保每个角色至少有 2 条关系连线
 2. 关系要有灰色地带，包含至少 1 条"表里不一"的关系
 3. 利益链和情感链要具体
-4. from_name 和 to_name 必须与角色列表中的名字完全一致
-5. ⚠️ 关系方向非常重要——用于生成关系脉络图：
-   - 主角（male_lead/female_lead）应出现在 from_name 一侧，指向配角或反派
-   - 配角之间的关系由高地位角色指向低地位角色
-   - 反派指向被其威胁/对抗的角色
-   - 不要让所有关系都从同一个角色出发，要形成多层网络：主角层 → 配角层 → 反派层
-   - 这样生成的关系图才能形成清晰的上下层级脉络，而非一条水平线${charHint}${compactContext}`
+4. from_name 和 to_name 必须与角色列表中的名字完全一致${charHint}${compactContext}`
 }
 
 function buildCompactContext(existing) {

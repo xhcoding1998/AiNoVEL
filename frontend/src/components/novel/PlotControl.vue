@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { useNovelStore } from '../../stores/novel'
 import { useToast } from '../../composables/useToast'
 import { useAIRegenerate } from '../../composables/useAIRegenerate'
+import { useCascadeRegenerate } from '../../composables/useCascadeRegenerate'
 import { aiApi } from '../../api/ai'
 import VTextarea from '../ui/VTextarea.vue'
 import VButton from '../ui/VButton.vue'
@@ -26,6 +27,10 @@ watch(dataVersion, () => loadAll())
 
 const regenPlot = useAIRegenerate()
 const regenVol = useAIRegenerate()
+const {
+  showCascadeModal, cascadeAffectedSteps, cascadeStepLabel,
+  cascadeLoading, promptCascade, confirmCascade, cancelCascade
+} = useCascadeRegenerate()
 
 const activeTab = ref('storyline')
 const saving = ref(false)
@@ -61,15 +66,22 @@ onMounted(loadAll)
 
 async function savePlot() {
   saving.value = true
-  try { await store.savePlotControl(pid, plotForm.value); toast.success('已保存') }
-  catch { toast.error('保存失败') }
+  try {
+    await store.savePlotControl(pid, plotForm.value)
+    toast.success('已保存')
+    promptCascade(pid, 'plot_control', loadAll)
+  } catch { toast.error('保存失败') }
   finally { saving.value = false }
 }
 
 async function saveVolume() {
   saving.value = true
-  try { await store.saveVolume(pid, volumeForm.value); toast.success('已保存'); showVolumeModal.value = false }
-  catch { toast.error('保存失败') }
+  try {
+    await store.saveVolume(pid, volumeForm.value)
+    toast.success('已保存')
+    showVolumeModal.value = false
+    promptCascade(pid, 'volumes', loadAll)
+  } catch { toast.error('保存失败') }
   finally { saving.value = false }
 }
 
@@ -266,6 +278,20 @@ const tabs = [{ label: '故事主线', value: 'storyline' }, { label: '分卷大
       @cancel="regenVol.cancelRegenerate()"
     >
       <p>重新生成「分卷大纲」将覆盖当前所有分卷数据及其下的章节内容，且由于内容链路的依赖关系，此阶段之后的所有内容也可能需要重新生成以保持一致性。</p>
+    </VConfirmModal>
+
+    <VConfirmModal
+      v-model="showCascadeModal"
+      title="是否重新生成后续内容？"
+      confirm-text="重新生成后续"
+      cancel-text="跳过"
+      confirm-variant="primary"
+      :affected-steps="cascadeAffectedSteps"
+      :loading="cascadeLoading"
+      @confirm="confirmCascade"
+      @cancel="cancelCascade"
+    >
+      <p>你修改了「{{ cascadeStepLabel }}」，后续内容依赖此信息。建议重新生成以保持一致性，也可跳过稍后手动处理。</p>
     </VConfirmModal>
   </div>
 </template>

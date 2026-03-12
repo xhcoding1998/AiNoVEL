@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { useNovelStore } from '../../stores/novel'
 import { useToast } from '../../composables/useToast'
 import { useAIRegenerate } from '../../composables/useAIRegenerate'
+import { useCascadeRegenerate } from '../../composables/useCascadeRegenerate'
 import VTextarea from '../ui/VTextarea.vue'
 import VInput from '../ui/VInput.vue'
 import VButton from '../ui/VButton.vue'
@@ -19,6 +20,10 @@ const {
   showConfirmModal, affectedSteps,
   requestRegenerate, confirmRegenerate, cancelRegenerate
 } = useAIRegenerate()
+const {
+  showCascadeModal, cascadeAffectedSteps, cascadeStepLabel,
+  cascadeLoading, promptCascade, confirmCascade, cancelCascade
+} = useCascadeRegenerate()
 const dataVersion = inject('dataVersion', ref(0))
 const isGenerating = inject('isParentGenerating', ref(false))
 watch(dataVersion, () => loadData())
@@ -44,6 +49,7 @@ async function save() {
   try {
     await store.saveWorldBuilding(pid, form.value)
     toast.success('已保存')
+    promptCascade(pid, 'world_building', loadData)
   } catch { toast.error('保存失败') }
   finally { saving.value = false }
 }
@@ -103,6 +109,20 @@ function handleRegenClick() {
     @cancel="cancelRegenerate"
   >
     <p>重新生成「世界观与背景」将覆盖当前的世界观设定。由于内容链路的依赖关系，此阶段之后的角色、关系、剧情等内容都可能需要重新生成以保持一致性。</p>
+  </VConfirmModal>
+
+  <VConfirmModal
+    v-model="showCascadeModal"
+    title="是否重新生成后续内容？"
+    confirm-text="重新生成后续"
+    cancel-text="跳过"
+    confirm-variant="primary"
+    :affected-steps="cascadeAffectedSteps"
+    :loading="cascadeLoading"
+    @confirm="confirmCascade"
+    @cancel="cancelCascade"
+  >
+    <p>你修改了「{{ cascadeStepLabel }}」，后续内容依赖此信息。建议重新生成以保持一致性，也可跳过稍后手动处理。</p>
   </VConfirmModal>
 </template>
 

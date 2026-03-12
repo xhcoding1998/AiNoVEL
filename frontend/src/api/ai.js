@@ -5,6 +5,7 @@ export const aiApi = {
   continueGeneration: (pid) => client.post(`/projects/${pid}/continue-generation`),
   stopGeneration: (pid) => client.post(`/projects/${pid}/stop-generation`),
   generateSection: (pid, section, prompt) => client.post(`/projects/${pid}/generate-section`, { section, prompt }),
+  regenerateFrom: (pid, afterStep) => client.post(`/projects/${pid}/regenerate-from`, { after_step: afterStep }),
   getGenerationStatus: (pid) => client.get(`/projects/${pid}/generation-status`),
   getTasks: (pid) => client.get(`/projects/${pid}/ai-tasks`),
   getTask: (pid, tid) => client.get(`/projects/${pid}/ai-tasks/${tid}`),

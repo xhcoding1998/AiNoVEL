@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { useNovelStore } from '../../stores/novel'
 import { useToast } from '../../composables/useToast'
 import { useAIRegenerate } from '../../composables/useAIRegenerate'
+import { useCascadeRegenerate } from '../../composables/useCascadeRegenerate'
 import { useGraph } from '../../composables/useGraph'
 import { aiApi } from '../../api/ai'
 import VButton from '../ui/VButton.vue'
@@ -23,6 +24,10 @@ const {
   showConfirmModal, affectedSteps,
   requestRegenerate, confirmRegenerate, cancelRegenerate
 } = useAIRegenerate()
+const {
+  showCascadeModal, cascadeAffectedSteps, cascadeStepLabel,
+  cascadeLoading, promptCascade, confirmCascade, cancelCascade
+} = useCascadeRegenerate()
 const pid = route.params.id
 const dataVersion = inject('dataVersion', ref(0))
 const isGenerating = inject('isParentGenerating', ref(false))
@@ -67,8 +72,12 @@ function openAddRelation() {
 async function saveRelation() {
   if (!relationForm.value.from_character_id || !relationForm.value.to_character_id) { toast.warning('请选择两个角色'); return }
   saving.value = true
-  try { await store.saveRelation(pid, relationForm.value); toast.success('已保存'); showAddRelation.value = false }
-  catch { toast.error('保存失败') }
+  try {
+    await store.saveRelation(pid, relationForm.value)
+    toast.success('已保存')
+    showAddRelation.value = false
+    promptCascade(pid, 'relations', loadData)
+  } catch { toast.error('保存失败') }
   finally { saving.value = false }
 }
 
@@ -119,15 +128,46 @@ async function aiGenerateRelation() {
 
 function edgePath(points) {
   if (!points || points.length < 2) return ''
-  return points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ')
+  if (points.length === 2) {
+    return `M${points[0].x},${points[0].y} L${points[1].x},${points[1].y}`
+  }
+  if (points.length === 3) {
+    const [p0, p1, p2] = points
+    return `M${p0.x},${p0.y} Q${p1.x},${p1.y} ${p2.x},${p2.y}`
+  }
+  // 4+ points: smooth cubic bezier through midpoints
+  let d = `M${points[0].x},${points[0].y}`
+  for (let i = 1; i < points.length - 1; i++) {
+    const curr = points[i]
+    const next = points[i + 1]
+    const midX = (curr.x + next.x) / 2
+    const midY = (curr.y + next.y) / 2
+    if (i === points.length - 2) {
+      d += ` Q${curr.x},${curr.y} ${next.x},${next.y}`
+    } else {
+      d += ` Q${curr.x},${curr.y} ${midX},${midY}`
+    }
+  }
+  return d
 }
 
 function edgeLabelPos(points) {
   if (!points || points.length < 2) return { x: 0, y: 0 }
-  return points[Math.floor(points.length / 2)]
+  if (points.length === 2) {
+    return { x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 }
+  }
+  if (points.length === 3) {
+    const t = 0.5
+    const x = (1 - t) * (1 - t) * points[0].x + 2 * (1 - t) * t * points[1].x + t * t * points[2].x
+    const y = (1 - t) * (1 - t) * points[0].y + 2 * (1 - t) * t * points[1].y + t * t * points[2].y
+    return { x, y }
+  }
+  const mid = Math.floor(points.length / 2)
+  return { x: (points[mid - 1].x + points[mid].x) / 2, y: (points[mid - 1].y + points[mid].y) / 2 }
 }
 
 const roleColorMap = { male_lead: '#0070f3', female_lead: '#8b5cf6', supporting: '#525252', antagonist: '#ee4444' }
+const roleLabel = { male_lead: '男主', female_lead: '女主', supporting: '配角', antagonist: '反派' }
 </script>
 
 <template>
@@ -196,10 +236,24 @@ const roleColorMap = { male_lead: '#0070f3', female_lead: '#8b5cf6', supporting:
             class="relation-node-border"
             :style="{ '--node-color': roleColorMap[node.data?.role_type] || '#525252' }"
           />
-          <text :x="node.x" :y="node.y + 5" text-anchor="middle" class="relation-node-label" font-size="13" font-weight="600">
+          <text :x="node.x" :y="node.y + 1" text-anchor="middle" class="relation-node-label" font-size="13" font-weight="600">
             <title>{{ node.label }}</title>
             {{ node.displayLabel || node.label }}
           </text>
+          <g v-if="roleLabel[node.data?.role_type]">
+            <rect
+              :x="node.x + node.width / 2 - 28"
+              :y="node.y - node.height / 2 - 8"
+              width="32" height="16" rx="4"
+              :fill="roleColorMap[node.data?.role_type] || '#525252'"
+              opacity="0.9"
+            />
+            <text
+              :x="node.x + node.width / 2 - 12"
+              :y="node.y - node.height / 2 + 4"
+              text-anchor="middle" fill="#fff" font-size="9" font-weight="600"
+            >{{ roleLabel[node.data?.role_type] }}</text>
+          </g>
         </g>
       </svg>
     </VCard>
@@ -288,6 +342,20 @@ const roleColorMap = { male_lead: '#0070f3', female_lead: '#8b5cf6', supporting:
       @cancel="cancelRegenerate"
     >
       <p>重新生成「人物关系」将覆盖当前所有关系数据，且由于内容链路的依赖关系，此阶段之后的所有内容也可能需要重新生成以保持一致性。</p>
+    </VConfirmModal>
+
+    <VConfirmModal
+      v-model="showCascadeModal"
+      title="是否重新生成后续内容？"
+      confirm-text="重新生成后续"
+      cancel-text="跳过"
+      confirm-variant="primary"
+      :affected-steps="cascadeAffectedSteps"
+      :loading="cascadeLoading"
+      @confirm="confirmCascade"
+      @cancel="cancelCascade"
+    >
+      <p>你修改了「{{ cascadeStepLabel }}」，后续内容依赖此信息。建议重新生成以保持一致性，也可跳过稍后手动处理。</p>
     </VConfirmModal>
   </div>
 </template>
