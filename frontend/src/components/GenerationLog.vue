@@ -40,6 +40,8 @@ async function fetchLogs() {
 
 function startPolling() {
   stopPolling()
+  logs.value = []
+  lastId = 0
   fetchLogs()
   pollTimer = setInterval(fetchLogs, 1500)
 }

@@ -15,6 +15,7 @@ export const aiApi = {
   generateChapterContent: (pid, chapterId) => client.post(`/projects/${pid}/generate-chapter-content`, { chapter_id: chapterId }),
   getPreview: (pid) => client.get(`/projects/${pid}/preview`),
   generateSingleItem: (pid, itemType, context) => client.post(`/projects/${pid}/generate-single-item`, { item_type: itemType, context }),
+  regeneratePlotDevices: (pid) => client.post(`/projects/${pid}/regenerate-plot-devices`),
   getGenerationLogs: (pid, taskId, afterId) => {
     const params = {}
     if (taskId) params.task_id = taskId

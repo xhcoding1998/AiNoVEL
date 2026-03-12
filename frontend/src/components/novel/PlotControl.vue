@@ -27,6 +27,8 @@ watch(dataVersion, () => loadAll())
 
 const regenPlot = useAIRegenerate()
 const regenVol = useAIRegenerate()
+const regenDevicesLoading = ref(false)
+const showRegenDevicesInput = ref(false)
 const {
   showCascadeModal, cascadeAffectedSteps, cascadeStepLabel,
   cascadeLoading, promptCascade, confirmCascade, cancelCascade
@@ -149,6 +151,19 @@ async function aiGenerateDevice() {
   }
 }
 
+async function regenAllDevices() {
+  regenDevicesLoading.value = true
+  try {
+    await aiApi.regeneratePlotDevices(pid)
+    await store.fetchPlotDevices(pid)
+    toast.success('叙事装置已重新生成')
+  } catch (err) {
+    toast.error(err?.error || 'AI 重新生成失败')
+  } finally {
+    regenDevicesLoading.value = false
+  }
+}
+
 const tabs = [{ label: '故事主线', value: 'storyline' }, { label: '分卷大纲', value: 'volumes' }, { label: '伏笔/反转', value: 'devices' }]
 </script>
 
@@ -221,7 +236,12 @@ const tabs = [{ label: '故事主线', value: 'storyline' }, { label: '分卷大
       <template v-if="activeTab === 'devices'">
         <div class="sub-header">
           <span class="sub-title">伏笔 / 反转 / 信息差</span>
-          <VButton variant="primary" size="sm" @click="openAddDevice">添加</VButton>
+          <div class="flex gap-2">
+            <VButton variant="ghost" size="sm" :loading="regenDevicesLoading" :disabled="isGenerating" @click="regenAllDevices">
+              AI 重新生成
+            </VButton>
+            <VButton variant="primary" size="sm" @click="openAddDevice">添加</VButton>
+          </div>
         </div>
         <div class="device-list">
           <VCard v-for="d in store.plotDevices" :key="d.id" padding="sm">

@@ -2,11 +2,13 @@ import { Hono } from 'hono'
 import sql from '../db/index.js'
 import { authMiddleware } from '../middleware/auth.js'
 import { compileMaterial } from '../services/material.js'
-import { callAI, buildStepPrompt, buildChapterOutlinesPrompt, buildChapterContentPrompt, GENERATION_STEPS, STEP_LABELS } from '../services/ai.js'
+import { callAI, buildStepPrompt, buildChapterOutlinesPrompt, buildChapterContentPrompt, contextBlock, GENERATION_STEPS, STEP_LABELS } from '../services/ai.js'
 import { parseAndSaveSection } from '../services/parser.js'
 
 const ai = new Hono()
 ai.use('*', authMiddleware)
+
+const JSON_RULE = '你必须返回严格的 JSON 格式。不要包含任何额外文字、markdown 标记、代码块标记。直接返回 JSON 对象。'
 
 async function verifyProjectOwner(c) {
   const userId = c.get('userId')
@@ -65,6 +67,7 @@ ai.post('/:id/generate-all', async (c) => {
   const userId = c.get('userId')
   const userConfig = await getUserAIConfig(userId)
 
+  await sql`DELETE FROM generation_logs WHERE project_id = ${pid}`
   await sql`UPDATE projects SET generation_status = 'generating', generation_step = ${GENERATION_STEPS[0]}, initial_prompt = ${prompt || ''}, updated_at = NOW() WHERE id = ${pid}`
 
   const [task] = await sql`
@@ -147,6 +150,7 @@ ai.post('/:id/regenerate-from', async (c) => {
   const userConfig = await getUserAIConfig(userId)
 
   await compileMaterial(pid)
+  await sql`DELETE FROM generation_logs WHERE project_id = ${pid}`
   await sql`UPDATE projects SET generation_status = 'generating', updated_at = NOW() WHERE id = ${pid}`
 
   const stepsToRegen = GENERATION_STEPS.slice(startIdx).map(s => STEP_LABELS[s] || s).join('、')
@@ -174,6 +178,7 @@ ai.post('/:id/generate-section', async (c) => {
   const userId = c.get('userId')
   const userConfig = await getUserAIConfig(userId)
 
+  await sql`DELETE FROM generation_logs WHERE project_id = ${pid}`
   await sql`UPDATE projects SET generation_status = 'generating', generation_step = ${section}, updated_at = NOW() WHERE id = ${pid}`
 
   const [task] = await sql`
@@ -212,6 +217,52 @@ ai.post('/:id/generate-single-item', async (c) => {
     const result = await callAI(userConfig, prompt, context || '请生成一条新内容', { json_mode: true, max_tokens: 4096 })
     const parsed = JSON.parse(result.trim().replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, ''))
     return c.json({ data: parsed })
+  } catch (err) {
+    return c.json({ error: err.message || 'AI 生成失败' }, 500)
+  }
+})
+
+// Batch regenerate plot devices
+ai.post('/:id/regenerate-plot-devices', async (c) => {
+  const pid = await verifyProjectOwner(c)
+  if (!pid) return c.json({ error: '项目不存在' }, 404)
+
+  const userId = c.get('userId')
+  const userConfig = await getUserAIConfig(userId)
+
+  let existingMaterial = {}
+  try {
+    const compiled = await compileMaterial(pid)
+    existingMaterial = compiled.content || {}
+  } catch { /* ignore */ }
+
+  const ctx = contextBlock(existingMaterial)
+  const prompt = `你是一位精通叙事设计的编剧顾问。请基于已有物料，为这部小说生成 3-5 个叙事装置（伏笔、反转、信息差混合搭配）。
+${JSON_RULE}
+返回格式：{ "devices": [ { "device_type": "foreshadowing" | "reversal" | "info_gap", "description": "描述", "setup_chapter": 数字（埋设章节）, "payoff_chapter": 数字（揭示/兑现章节）, "status": "planted" } ] }
+要求：
+- device_type 只能是 foreshadowing（伏笔）、reversal（反转）、info_gap（信息差）之一
+- 每个装置要与现有剧情和角色紧密关联
+- 叙事装置之间应有层次感，不要重复同一模式
+- setup_chapter < payoff_chapter
+- 如果已有 plot_devices，可以在其基础上补充完善，也可以全新设计
+${ctx}`
+
+  try {
+    const result = await callAI(userConfig, prompt, '请生成叙事装置', { json_mode: true, max_tokens: 8192 })
+    const parsed = JSON.parse(result.trim().replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, ''))
+
+    const devices = parsed.devices || parsed.plot_devices || []
+    if (devices.length) {
+      await sql`DELETE FROM plot_devices WHERE project_id = ${pid}`
+      for (const d of devices) {
+        await sql`INSERT INTO plot_devices (project_id, device_type, description, setup_chapter, payoff_chapter, status)
+          VALUES (${pid}, ${d.device_type || 'foreshadowing'}, ${d.description || ''}, ${d.setup_chapter || null}, ${d.payoff_chapter || null}, ${d.status || 'planted'})`
+      }
+      await compileMaterial(pid)
+    }
+
+    return c.json({ data: devices })
   } catch (err) {
     return c.json({ error: err.message || 'AI 生成失败' }, 500)
   }
@@ -392,6 +443,16 @@ async function isTaskStopped(taskId) {
   return !task || task.status === 'failed'
 }
 
+const STEP_MATERIAL_KEYS = {
+  basic_info: ['basic_info'],
+  world_building: ['world_building'],
+  characters: ['characters'],
+  relations: ['relations'],
+  plot_control: ['plot', 'plot_devices'],
+  volumes: ['volumes', 'chapters_summary'],
+  writing_style: ['writing_style']
+}
+
 async function processStepByStep(taskId, projectId, prompt, userConfig, startIdx) {
   for (let i = startIdx; i < GENERATION_STEPS.length; i++) {
     if (await isTaskStopped(taskId)) {
@@ -411,6 +472,17 @@ async function processStepByStep(taskId, projectId, prompt, userConfig, startIdx
         const compiled = await compileMaterial(projectId)
         existingMaterial = compiled.content || {}
       } catch { /* first run, no material yet */ }
+
+      if (startIdx > 0) {
+        const keysToRemove = new Set()
+        for (let j = i; j < GENERATION_STEPS.length; j++) {
+          const keys = STEP_MATERIAL_KEYS[GENERATION_STEPS[j]] || []
+          keys.forEach(k => keysToRemove.add(k))
+        }
+        for (const k of keysToRemove) {
+          delete existingMaterial[k]
+        }
+      }
 
       const systemPrompt = buildStepPrompt(step, prompt, existingMaterial)
       const userPrompt = prompt || '请根据已有物料生成本部分内容'
@@ -636,8 +708,6 @@ function buildSingleItemPrompt(itemType, existingMaterial, userContext) {
   const ctx = existingMaterial && Object.keys(existingMaterial).length
     ? `\n\n【当前已有物料（请保持一致性）】\n${JSON.stringify(existingMaterial, null, 2)}`
     : ''
-
-  const JSON_RULE = '你必须返回严格的 JSON 格式。不要包含任何额外文字、markdown 标记、代码块标记。直接返回 JSON 对象。'
 
   if (itemType === 'character') {
     return `你是一位角色塑造专家。请基于已有物料和用户要求，设计一个新的角色。

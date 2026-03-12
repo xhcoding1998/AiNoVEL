@@ -160,9 +160,13 @@ async function tryNonStreamingChat(baseUrl, apiKey, model, systemPrompt, userPro
 
 // ---------- Per-section prompt builders ----------
 
-function contextBlock(existingMaterial) {
+export function contextBlock(existingMaterial) {
   if (!existingMaterial || Object.keys(existingMaterial).length === 0) return ''
-  return `\n\n【当前已有物料（供参考与保持一致性）】\n${JSON.stringify(existingMaterial, null, 2)}`
+  return `\n\n【当前已有物料（供参考与保持一致性）】\n${JSON.stringify(existingMaterial, null, 2)}
+
+⚠️ 重要：物料中各字段可能存在数据不一致（比如用户刚修改了角色名但其他文本还是旧名字）。
+遇到冲突时，请严格以 characters 数组中的最新角色名为准，完全忽略其他字段中出现的旧名字。
+绝对不要出现"旧名（又名/艺名/原名：新名）"这种写法，直接使用 characters 中的名字。`
 }
 
 const JSON_RULE = `你必须返回严格的 JSON 格式。不要包含任何额外文字、markdown 标记、代码块标记。直接返回 JSON 对象。`
