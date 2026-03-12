@@ -3,6 +3,7 @@ import client from './client'
 export const aiApi = {
   generateAll: (pid, prompt) => client.post(`/projects/${pid}/generate-all`, { prompt }),
   continueGeneration: (pid) => client.post(`/projects/${pid}/continue-generation`),
+  stopGeneration: (pid) => client.post(`/projects/${pid}/stop-generation`),
   generateSection: (pid, section, prompt) => client.post(`/projects/${pid}/generate-section`, { section, prompt }),
   getGenerationStatus: (pid) => client.get(`/projects/${pid}/generation-status`),
   getTasks: (pid) => client.get(`/projects/${pid}/ai-tasks`),

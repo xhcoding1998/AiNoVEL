@@ -11,7 +11,7 @@ const props = defineProps({
   projectId: { type: [String, Number], default: null }
 })
 
-const emit = defineEmits(['continue', 'regenerate'])
+const emit = defineEmits(['continue', 'regenerate', 'stop'])
 
 const expanded = ref(false)
 
@@ -67,6 +67,9 @@ function getStepState(step) {
       </div>
 
       <div class="gen-banner__right">
+        <template v-if="status === 'generating'">
+          <button class="gen-action gen-action--danger" @click="$emit('stop')">停止生成</button>
+        </template>
         <template v-if="status === 'failed'">
           <button class="gen-action gen-action--primary" @click="$emit('continue')">继续生成</button>
           <button class="gen-action gen-action--ghost" @click="$emit('regenerate')">重新生成</button>
@@ -114,6 +117,7 @@ function getStepState(step) {
           v-if="projectId && (status === 'generating' || status === 'failed')"
           :project-id="projectId"
           :active="status === 'generating'"
+          :status="status"
         />
       </div>
     </Transition>
@@ -234,6 +238,16 @@ function getStepState(step) {
 
 .gen-action--primary:hover {
   opacity: 0.85;
+}
+
+.gen-action--danger {
+  background: rgba(238, 68, 68, 0.1);
+  color: var(--accent-red);
+  border: 1px solid rgba(238, 68, 68, 0.2);
+}
+
+.gen-action--danger:hover {
+  background: rgba(238, 68, 68, 0.18);
 }
 
 .gen-action--ghost {

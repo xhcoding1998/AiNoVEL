@@ -4,7 +4,8 @@ import { aiApi } from '../api/ai'
 
 const props = defineProps({
   projectId: { type: [String, Number], required: true },
-  active: { type: Boolean, default: false }
+  active: { type: Boolean, default: false },
+  status: { type: String, default: '' }
 })
 
 const logs = ref([])
@@ -60,6 +61,13 @@ watch(() => props.active, (val) => {
   if (val) startPolling()
   else stopPolling()
 }, { immediate: true })
+
+watch(() => props.status, (val) => {
+  if (val === 'failed') {
+    stopPolling()
+    fetchLogs()
+  }
+})
 
 onUnmounted(stopPolling)
 

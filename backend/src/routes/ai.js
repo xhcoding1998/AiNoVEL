@@ -108,6 +108,22 @@ ai.post('/:id/continue-generation', async (c) => {
   return c.json({ data: task })
 })
 
+// Stop generation
+ai.post('/:id/stop-generation', async (c) => {
+  const pid = await verifyProjectOwner(c)
+  if (!pid) return c.json({ error: '项目不存在' }, 404)
+
+  const [proj] = await sql`SELECT generation_status, generation_step FROM projects WHERE id = ${pid}`
+  if (proj.generation_status !== 'generating') {
+    return c.json({ error: '当前没有正在进行的生成任务' }, 400)
+  }
+
+  await sql`UPDATE ai_tasks SET status = 'failed', result = '用户手动停止', completed_at = NOW() WHERE project_id = ${pid} AND status = 'running'`
+  await sql`UPDATE projects SET generation_status = 'failed', updated_at = NOW() WHERE id = ${pid}`
+
+  return c.json({ message: '已停止生成' })
+})
+
 // Section regeneration
 ai.post('/:id/generate-section', async (c) => {
   const pid = await verifyProjectOwner(c)
@@ -274,10 +290,31 @@ ai.get('/:id/preview', async (c) => {
 
 // ---------- Logging helper ----------
 
+let logTableReady = false
+async function ensureLogTable() {
+  if (logTableReady) return
+  try {
+    await sql`CREATE TABLE IF NOT EXISTS generation_logs (
+      id SERIAL PRIMARY KEY,
+      project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+      task_id INTEGER REFERENCES ai_tasks(id) ON DELETE CASCADE,
+      level VARCHAR(10) DEFAULT 'info',
+      message TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`
+    logTableReady = true
+  } catch (e) {
+    console.error('[writeLog] ensureLogTable failed:', e.message)
+  }
+}
+
 async function writeLog(projectId, taskId, level, message) {
   try {
+    await ensureLogTable()
     await sql`INSERT INTO generation_logs (project_id, task_id, level, message) VALUES (${projectId}, ${taskId}, ${level}, ${message})`
-  } catch { /* best-effort logging */ }
+  } catch (e) {
+    console.error('[writeLog] failed:', e.message)
+  }
 }
 
 function createChunkLogger(projectId, taskId) {
@@ -313,8 +350,18 @@ const STEP_MAX_TOKENS = {
   writing_style: 128000
 }
 
+async function isTaskStopped(taskId) {
+  const [task] = await sql`SELECT status FROM ai_tasks WHERE id = ${taskId}`
+  return !task || task.status === 'failed'
+}
+
 async function processStepByStep(taskId, projectId, prompt, userConfig, startIdx) {
   for (let i = startIdx; i < GENERATION_STEPS.length; i++) {
+    if (await isTaskStopped(taskId)) {
+      await writeLog(projectId, taskId, 'info', '生成已被用户停止')
+      return
+    }
+
     const step = GENERATION_STEPS[i]
     const label = STEP_LABELS[step] || step
 
@@ -337,6 +384,11 @@ async function processStepByStep(taskId, projectId, prompt, userConfig, startIdx
         onChunk: (t) => chunker.push(t)
       })
       await chunker.flush()
+
+      if (await isTaskStopped(taskId)) {
+        await writeLog(projectId, taskId, 'info', '生成已被用户停止')
+        return
+      }
 
       await parseAndSaveSection(projectId, step, result)
       await compileMaterial(projectId)

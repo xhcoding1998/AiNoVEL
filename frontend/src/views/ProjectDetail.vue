@@ -134,6 +134,17 @@ function stopPolling() {
   }
 }
 
+async function handleStop() {
+  try {
+    await aiApi.stopGeneration(route.params.id)
+    stopPolling()
+    await checkStatus()
+    toast.info('已停止生成，可点击"继续生成"恢复')
+  } catch (err) {
+    toast.error(err?.error || '停止失败')
+  }
+}
+
 async function handleContinue() {
   try {
     await aiApi.continueGeneration(route.params.id)
@@ -221,6 +232,7 @@ watch(() => route.params.id, async (id) => {
         :step-labels="stepLabels"
         :project-id="route.params.id"
         @continue="handleContinue"
+        @stop="handleStop"
         @regenerate="showRegenModal = true"
       />
 
