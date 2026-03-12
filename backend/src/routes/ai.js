@@ -501,23 +501,35 @@ ai.get('/:id/generation-logs/stream', async (c) => {
       const send = (data) => {
         try { controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`)) } catch { /* closed */ }
       }
+      const heartbeat = () => {
+        try { controller.enqueue(encoder.encode(`: heartbeat\n\n`)) } catch { /* closed */ }
+      }
+
+      // Send initial heartbeat immediately so the connection is established
+      heartbeat()
 
       const poll = setInterval(async () => {
         if (closed) { clearInterval(poll); return }
         try {
           const rows = await sql`SELECT id, level, message, created_at FROM generation_logs WHERE project_id = ${pid} AND id > ${lastId} ORDER BY id ASC LIMIT 50`
-          for (const row of rows) {
-            send(row)
-            lastId = row.id
+          if (rows.length) {
+            for (const row of rows) {
+              send(row)
+              lastId = row.id
+            }
+          } else {
+            heartbeat()
           }
-        } catch { /* ignore db errors during poll */ }
+        } catch { heartbeat() }
       }, 1500)
 
-      c.req.raw.signal?.addEventListener('abort', () => {
+      const cleanup = () => {
         closed = true
         clearInterval(poll)
         try { controller.close() } catch { /* already closed */ }
-      })
+      }
+
+      c.req.raw.signal?.addEventListener('abort', cleanup)
     }
   })
 
@@ -525,7 +537,8 @@ ai.get('/:id/generation-logs/stream', async (c) => {
     headers: {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive'
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no'
     }
   })
 })
