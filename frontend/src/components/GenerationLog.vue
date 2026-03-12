@@ -9,15 +9,16 @@ const props = defineProps({
 
 const logs = ref([])
 const containerRef = ref(null)
-let eventSource = null
+let pollTimer = null
 let lastId = 0
 
-function connectSSE() {
-  disconnectSSE()
-  eventSource = aiApi.streamLogs(props.projectId, lastId)
-  eventSource.onmessage = (e) => {
-    try {
-      const row = JSON.parse(e.data)
+async function fetchLogs() {
+  try {
+    const res = await aiApi.getGenerationLogs(props.projectId, null, lastId)
+    const rows = res.data || res || []
+    if (!rows.length) return
+
+    for (const row of rows) {
       if (row.level === 'chunk') {
         const last = logs.value[logs.value.length - 1]
         if (last && last.level === 'chunk') {
@@ -29,19 +30,23 @@ function connectSSE() {
         logs.value.push(row)
       }
       lastId = row.id
-      if (logs.value.length > 300) logs.value.splice(0, logs.value.length - 200)
-      nextTick(scrollToBottom)
-    } catch { /* ignore parse errors */ }
-  }
-  eventSource.onerror = () => {
-    disconnectSSE()
-  }
+    }
+
+    if (logs.value.length > 300) logs.value.splice(0, logs.value.length - 200)
+    nextTick(scrollToBottom)
+  } catch { /* ignore fetch errors */ }
 }
 
-function disconnectSSE() {
-  if (eventSource) {
-    eventSource.close()
-    eventSource = null
+function startPolling() {
+  stopPolling()
+  fetchLogs()
+  pollTimer = setInterval(fetchLogs, 1500)
+}
+
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
   }
 }
 
@@ -52,11 +57,11 @@ function scrollToBottom() {
 }
 
 watch(() => props.active, (val) => {
-  if (val) connectSSE()
-  else disconnectSSE()
+  if (val) startPolling()
+  else stopPolling()
 }, { immediate: true })
 
-onUnmounted(disconnectSSE)
+onUnmounted(stopPolling)
 
 function levelIcon(level) {
   if (level === 'success') return '✓'
