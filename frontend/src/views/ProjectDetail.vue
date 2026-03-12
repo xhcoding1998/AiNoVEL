@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, provide } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useProjectStore } from '../stores/project'
 import { useToast } from '../composables/useToast'
@@ -24,6 +24,10 @@ const pollTimer = ref(null)
 const showRegenModal = ref(false)
 const regenPrompt = ref('')
 const regenerating = ref(false)
+
+const dataVersion = ref(0)
+provide('dataVersion', dataVersion)
+provide('refreshParentStatus', () => checkStatus())
 
 const tabs = [
   { label: '基础信息', value: 'basic-info' },
@@ -53,11 +57,18 @@ const showProgress = computed(() => genStatus.value !== 'idle')
 async function checkStatus() {
   try {
     const res = await aiApi.getGenerationStatus(route.params.id)
+    const prevCompleted = completedSteps.value.length
+    const prevStatus = genStatus.value
+
     genStatus.value = res.status
     genStep.value = res.currentStep
     completedSteps.value = res.completedSteps || []
     allSteps.value = res.steps || []
     stepLabels.value = res.stepLabels || {}
+
+    if ((res.completedSteps?.length || 0) > prevCompleted || (res.status === 'completed' && prevStatus !== 'completed')) {
+      dataVersion.value++
+    }
 
     if (res.status === 'completed') {
       stopPolling()
@@ -137,10 +148,9 @@ watch(() => route.params.id, async (id) => {
   <div class="page-container">
     <VLoading v-if="projectStore.loading && !projectStore.currentProject" text="加载项目..." />
     <template v-else-if="projectStore.currentProject">
-      <!-- Header -->
       <div class="detail-header">
         <div class="detail-header__left">
-          <button class="back-btn" @click="router.push('/projects')">
+          <button class="back-btn" @click="router.push('/projects')" title="返回项目列表">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M10 3L5 8l5 5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
@@ -153,11 +163,14 @@ watch(() => route.params.id, async (id) => {
           </div>
         </div>
         <VButton variant="secondary" size="sm" @click="showRegenModal = true" :disabled="isGenerating">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="margin-right: 4px">
+            <path d="M1.5 7a5.5 5.5 0 019.81-3.37M12.5 7a5.5 5.5 0 01-9.81 3.37" stroke-linecap="round"/>
+            <path d="M11 1v3h-3M3 10v3h3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
           全部重新生成
         </VButton>
       </div>
 
-      <!-- Generation Progress -->
       <GenerationProgress
         v-if="showProgress"
         :status="genStatus"
@@ -169,30 +182,30 @@ watch(() => route.params.id, async (id) => {
         @regenerate="showRegenModal = true"
       />
 
-      <!-- Tabs & Content -->
       <VTabs :tabs="tabs" :model-value="currentTab" @update:model-value="switchTab" />
 
       <div class="project-content">
         <router-view :generation-status="genStatus" />
       </div>
 
-      <!-- Regen modal -->
       <Teleport to="body">
         <Transition name="fade">
           <div v-if="showRegenModal" class="modal-overlay" @click.self="showRegenModal = false">
-            <div class="modal-box">
-              <h3 class="modal-title">全部重新生成</h3>
-              <p class="modal-desc">输入新的创作指令，AI 将分步重新生成全部 7 大类内容，每步完成即可查看</p>
-              <VTextarea
-                v-model="regenPrompt"
-                placeholder="例如：调整风格为更暗黑的基调，增加一个双面间谍角色..."
-                :rows="4"
-              />
-              <div class="modal-footer">
-                <VButton variant="secondary" @click="showRegenModal = false">取消</VButton>
-                <VButton variant="primary" :loading="regenerating" @click="regenerateAll">开始生成</VButton>
+            <Transition name="scale">
+              <div v-if="showRegenModal" class="modal-box">
+                <h3 class="modal-title">全部重新生成</h3>
+                <p class="modal-desc">输入新的创作指令，AI 将分步重新生成全部 7 大类内容，每步完成即可查看</p>
+                <VTextarea
+                  v-model="regenPrompt"
+                  placeholder="例如：调整风格为更暗黑的基调，增加一个双面间谍角色..."
+                  :rows="4"
+                />
+                <div class="modal-footer">
+                  <VButton variant="secondary" @click="showRegenModal = false">取消</VButton>
+                  <VButton variant="primary" :loading="regenerating" @click="regenerateAll">开始生成</VButton>
+                </div>
               </div>
-            </div>
+            </Transition>
           </div>
         </Transition>
       </Teleport>
@@ -212,7 +225,7 @@ watch(() => route.params.id, async (id) => {
 .detail-header__left {
   display: flex;
   align-items: flex-start;
-  gap: 16px;
+  gap: 14px;
   flex: 1;
   min-width: 0;
 }
@@ -223,16 +236,18 @@ watch(() => route.params.id, async (id) => {
   justify-content: center;
   width: 36px;
   height: 36px;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   border-radius: var(--radius-md);
   flex-shrink: 0;
   margin-top: 2px;
-  transition: all 0.15s;
+  transition: all var(--transition-fast);
+  border: 1px solid var(--border-default);
 }
 
 .back-btn:hover {
   color: var(--text-primary);
   background: var(--bg-hover);
+  border-color: var(--border-hover);
 }
 
 .detail-header__info {
@@ -240,6 +255,7 @@ watch(() => route.params.id, async (id) => {
 }
 
 .detail-header__name {
+  font-family: var(--font-display);
   font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -264,7 +280,9 @@ watch(() => route.params.id, async (id) => {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -276,28 +294,32 @@ watch(() => route.params.id, async (id) => {
   width: 100%;
   max-width: 500px;
   background: var(--bg-tertiary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  padding: 24px;
+  border: 1px solid var(--border-hover);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
+  box-shadow: var(--shadow-xl);
 }
 
 .modal-title {
-  font-size: 16px;
+  font-family: var(--font-display);
+  font-size: 17px;
   font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .modal-desc {
   font-size: 13px;
   color: var(--text-secondary);
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 .modal-footer {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+  padding-top: var(--space-2);
 }
 </style>

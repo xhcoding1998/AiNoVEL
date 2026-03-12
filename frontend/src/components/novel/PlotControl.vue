@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch, inject } from 'vue'
 import { useRoute } from 'vue-router'
 import { useNovelStore } from '../../stores/novel'
 import { useToast } from '../../composables/useToast'
@@ -17,6 +17,8 @@ const route = useRoute()
 const store = useNovelStore()
 const toast = useToast()
 const pid = route.params.id
+const dataVersion = inject('dataVersion', ref(0))
+watch(dataVersion, () => loadAll())
 
 const regenPlot = useAIRegenerate()
 const regenVol = useAIRegenerate()
@@ -88,12 +90,17 @@ const tabs = [{ label: '故事主线', value: 'storyline' }, { label: '分卷大
 <template>
   <div>
     <VTabs :tabs="tabs" v-model="activeTab" />
-    <div style="margin-top: 20px">
+    <div class="tab-content">
       <template v-if="activeTab === 'storyline'">
         <VCard>
           <template #header>
             <div class="editor-header">
-              <span>故事主线</span>
+              <div class="editor-header__left">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
+                  <path d="M2 3h12M2 8h8M2 13h10" stroke-linecap="round"/>
+                </svg>
+                <span>故事主线</span>
+              </div>
               <VButton variant="ghost" size="sm" @click="regenPlot.showRegenInput.value = !regenPlot.showRegenInput.value" :loading="regenPlot.regenerating.value">
                 AI 重新生成
               </VButton>
@@ -114,8 +121,8 @@ const tabs = [{ label: '故事主线', value: 'storyline' }, { label: '分卷大
       </template>
 
       <template v-if="activeTab === 'volumes'">
-        <div class="flex justify-between items-center" style="margin-bottom:16px">
-          <span class="section-title" style="margin:0">分卷大纲</span>
+        <div class="sub-header">
+          <span class="sub-title">分卷大纲</span>
           <div class="flex gap-2">
             <VButton variant="ghost" size="sm" @click="regenVol.showRegenInput.value = !regenVol.showRegenInput.value" :loading="regenVol.regenerating.value">
               AI 重新生成
@@ -130,7 +137,10 @@ const tabs = [{ label: '故事主线', value: 'storyline' }, { label: '分卷大
         <div class="vol-list">
           <VCard v-for="vol in store.volumes" :key="vol.id" padding="sm">
             <div class="vol-item">
-              <div class="vol-item__head"><strong>第{{ vol.volume_number }}卷</strong><span v-if="vol.title">{{ vol.title }}</span></div>
+              <div class="vol-item__head">
+                <strong>第{{ vol.volume_number }}卷</strong>
+                <span v-if="vol.title" class="vol-item__title">{{ vol.title }}</span>
+              </div>
               <p v-if="vol.goal" class="vol-item__goal">目标：{{ vol.goal }}</p>
               <p v-if="vol.summary" class="vol-item__summary">{{ vol.summary }}</p>
             </div>
@@ -140,8 +150,8 @@ const tabs = [{ label: '故事主线', value: 'storyline' }, { label: '分卷大
       </template>
 
       <template v-if="activeTab === 'devices'">
-        <div class="flex justify-between items-center" style="margin-bottom:16px">
-          <span class="section-title" style="margin:0">伏笔 / 反转 / 信息差</span>
+        <div class="sub-header">
+          <span class="sub-title">伏笔 / 反转 / 信息差</span>
           <VButton variant="primary" size="sm" @click="openAddDevice">添加</VButton>
         </div>
         <div class="device-list">
@@ -191,16 +201,81 @@ const tabs = [{ label: '故事主线', value: 'storyline' }, { label: '分卷大
 </template>
 
 <style scoped>
-.editor-header { display: flex; align-items: center; justify-content: space-between; width: 100%; }
-.regen-bar { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); padding-bottom: var(--space-4); border-bottom: 1px solid var(--border-default); }
+.editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.editor-header__left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.editor-header__left svg {
+  color: var(--text-tertiary);
+}
+
+.tab-content {
+  margin-top: 20px;
+}
+
+.sub-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.sub-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.regen-bar {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--border-default);
+}
+
 .regen-bar .v-input { flex: 1; }
+
 .form-grid { display: flex; flex-direction: column; gap: var(--space-4); }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
 .vol-list, .device-list { display: flex; flex-direction: column; gap: var(--space-3); }
-.vol-item__head { display: flex; gap: var(--space-2); font-size: 14px; margin-bottom: var(--space-2); }
-.vol-item__goal { font-size: 13px; color: var(--text-secondary); }
-.vol-item__summary { font-size: 13px; color: var(--text-tertiary); margin-top: var(--space-1); }
+
+.vol-item__head {
+  display: flex;
+  gap: var(--space-2);
+  font-size: 14px;
+  margin-bottom: var(--space-2);
+  align-items: baseline;
+}
+
+.vol-item__title {
+  color: var(--text-secondary);
+}
+
+.vol-item__goal {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.vol-item__summary {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  margin-top: var(--space-1);
+  line-height: 1.5;
+}
+
 .device-item__head { display: flex; gap: var(--space-2); margin-bottom: var(--space-2); }
-.device-item__desc { font-size: 13px; color: var(--text-secondary); }
-.empty-text { color: var(--text-tertiary); text-align: center; padding: var(--space-8); }
+.device-item__desc { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+.empty-text { color: var(--text-tertiary); text-align: center; padding: var(--space-10); font-size: 14px; }
 </style>

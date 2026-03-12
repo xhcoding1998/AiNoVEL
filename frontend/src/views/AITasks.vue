@@ -72,7 +72,14 @@ function formatTime(ts) {
 <template>
   <div>
     <VCard>
-      <template #header>AI 创作指令</template>
+      <template #header>
+        <div class="flex items-center gap-2">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
+            <path d="M8 2l1.5 3 3.5.5-2.5 2.5.5 3.5L8 10l-3 1.5.5-3.5L3 5.5 6.5 5z" stroke-linejoin="round"/>
+          </svg>
+          <span>AI 创作指令</span>
+        </div>
+      </template>
       <div class="pipeline-input">
         <VTextarea
           v-model="prompt"
@@ -126,11 +133,13 @@ function formatTime(ts) {
 .pipeline-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 .pipeline-hint { font-size: 12px; color: var(--text-tertiary); }
 
-.tasks-section { margin-top: 24px; }
+.tasks-section { margin-top: 28px; }
 .tasks-section__title {
+  font-family: var(--font-display);
   font-size: 15px;
   font-weight: 600;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+  letter-spacing: -0.01em;
 }
 
 .task-list { display: flex; flex-direction: column; gap: 8px; }
@@ -165,7 +174,8 @@ function formatTime(ts) {
 .task-item__result {
   margin-top: 12px;
   padding: 12px;
-  background: var(--bg-secondary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   max-height: 300px;
   overflow-y: auto;
@@ -176,7 +186,8 @@ function formatTime(ts) {
   font-size: 12px;
   white-space: pre-wrap;
   word-break: break-all;
-  line-height: 1.5;
+  line-height: 1.6;
+  color: var(--text-secondary);
 }
 
 .empty-state {

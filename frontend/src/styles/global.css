@@ -1,10 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
 
 @import './variables.css';
 @import './reset.css';
 @import './transitions.css';
 
-/* Geist font fallback to Inter */
+/* Geist font */
 @font-face {
   font-family: 'Geist';
   src: url('https://assets.vercel.com/raw/upload/v1700428958/geist/Geist-Regular.woff2') format('woff2');
@@ -45,10 +45,11 @@
   font-display: swap;
 }
 
+/* Page structure */
 .page-container {
-  max-width: 1200px;
+  max-width: var(--content-max-width);
   margin: 0 auto;
-  padding: var(--space-6);
+  padding: var(--space-8) var(--space-6);
 }
 
 .page-title {
@@ -56,12 +57,14 @@
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: var(--space-6);
+  letter-spacing: -0.02em;
 }
 
 .page-subtitle {
   font-size: 14px;
   color: var(--text-secondary);
   margin-bottom: var(--space-8);
+  line-height: 1.6;
 }
 
 .section-title {
@@ -69,26 +72,34 @@
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: var(--space-4);
+  letter-spacing: -0.01em;
 }
 
-.flex {
-  display: flex;
-}
+/* Flex utilities */
+.flex { display: flex; }
+.flex-col { display: flex; flex-direction: column; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.flex-wrap { flex-wrap: wrap; }
+.flex-1 { flex: 1; }
 
-.flex-col {
-  display: flex;
-  flex-direction: column;
-}
-
-.items-center {
-  align-items: center;
-}
-
-.justify-between {
-  justify-content: space-between;
-}
-
+/* Gap utilities */
+.gap-1 { gap: var(--space-1); }
 .gap-2 { gap: var(--space-2); }
 .gap-3 { gap: var(--space-3); }
 .gap-4 { gap: var(--space-4); }
 .gap-6 { gap: var(--space-6); }
+.gap-8 { gap: var(--space-8); }
+
+/* Text utilities */
+.text-sm { font-size: 13px; }
+.text-xs { font-size: 12px; }
+.text-muted { color: var(--text-secondary); }
+.text-tertiary { color: var(--text-tertiary); }
+.font-medium { font-weight: 500; }
+.font-semibold { font-weight: 600; }
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

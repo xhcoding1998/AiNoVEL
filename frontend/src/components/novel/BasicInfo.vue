@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch, inject } from 'vue'
 import { useRoute } from 'vue-router'
 import { useNovelStore } from '../../stores/novel'
 import { useToast } from '../../composables/useToast'
@@ -14,6 +14,8 @@ const route = useRoute()
 const store = useNovelStore()
 const toast = useToast()
 const { showRegenInput, regenPrompt, regenerating, regenerateSection } = useAIRegenerate()
+const dataVersion = inject('dataVersion', ref(0))
+watch(dataVersion, () => loadData())
 
 const form = ref({
   book_name: '', genre: '', style: '',
@@ -59,7 +61,12 @@ async function handleRegen() {
   <VCard>
     <template #header>
       <div class="editor-header">
-        <span>基础信息</span>
+        <div class="editor-header__left">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
+            <rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 5h6M5 8h4M5 11h2" stroke-linecap="round"/>
+          </svg>
+          <span>基础信息</span>
+        </div>
         <VButton variant="ghost" size="sm" @click="showRegenInput = !showRegenInput" :loading="regenerating">
           AI 重新生成
         </VButton>
@@ -77,9 +84,9 @@ async function handleRegen() {
         <VSelect v-model="form.genre" label="题材" :options="genreOptions" />
         <VSelect v-model="form.style" label="风格" :options="styleOptions" />
       </div>
-      <VTextarea v-model="form.core_selling_point" label="核心卖点" placeholder="这本书最吸引人的地方是什么？" :rows="2" />
-      <VInput v-model="form.one_line_summary" label="一句话主线" placeholder="用一句话概括整个故事" />
-      <VTextarea v-model="form.target_readers" label="目标读者" placeholder="你的目标读者画像" :rows="2" />
+      <VTextarea v-model="form.core_selling_point" label="核心卖点" placeholder="这本书最吸引人的地方是什么？" :rows="4" />
+      <VTextarea v-model="form.one_line_summary" label="一句话主线" placeholder="用一句话概括整个故事" :rows="3" />
+      <VTextarea v-model="form.target_readers" label="目标读者" placeholder="你的目标读者画像" :rows="3" />
     </div>
     <template #footer>
       <VButton variant="primary" :loading="saving" @click="save">保存</VButton>
@@ -88,9 +95,42 @@ async function handleRegen() {
 </template>
 
 <style scoped>
-.editor-header { display: flex; align-items: center; justify-content: space-between; width: 100%; }
-.regen-bar { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); padding-bottom: var(--space-4); border-bottom: 1px solid var(--border-default); }
+.editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.editor-header__left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.editor-header__left svg {
+  color: var(--text-tertiary);
+}
+
+.regen-bar {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--border-default);
+}
+
 .regen-bar .v-input { flex: 1; }
-.form-grid { display: flex; flex-direction: column; gap: var(--space-4); }
-.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+
+.form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
 </style>

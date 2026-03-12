@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch, inject } from 'vue'
 import { useRoute } from 'vue-router'
 import { useNovelStore } from '../../stores/novel'
 import { useToast } from '../../composables/useToast'
@@ -14,6 +14,8 @@ const store = useNovelStore()
 const toast = useToast()
 const { showRegenInput, regenPrompt, regenerating, regenerateSection } = useAIRegenerate()
 const pid = route.params.id
+const dataVersion = inject('dataVersion', ref(0))
+watch(dataVersion, () => loadData())
 
 const form = ref({ writing_style: '', rhythm_requirement: '', romance_ratio: '', taboos: '', red_lines: '' })
 const saving = ref(false)
@@ -45,7 +47,12 @@ async function handleRegen() {
   <VCard>
     <template #header>
       <div class="editor-header">
-        <span>风格控制</span>
+        <div class="editor-header__left">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
+            <path d="M3 13l2-6L12 3l-4 7-5 3z" stroke-linejoin="round"/><circle cx="9" cy="7" r="1"/>
+          </svg>
+          <span>风格控制</span>
+        </div>
         <VButton variant="ghost" size="sm" @click="showRegenInput = !showRegenInput" :loading="regenerating">
           AI 重新生成
         </VButton>
@@ -71,8 +78,36 @@ async function handleRegen() {
 </template>
 
 <style scoped>
-.editor-header { display: flex; align-items: center; justify-content: space-between; width: 100%; }
-.regen-bar { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); padding-bottom: var(--space-4); border-bottom: 1px solid var(--border-default); }
+.editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.editor-header__left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.editor-header__left svg {
+  color: var(--text-tertiary);
+}
+
+.regen-bar {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--border-default);
+}
+
 .regen-bar .v-input { flex: 1; }
-.form-grid { display: flex; flex-direction: column; gap: var(--space-4); }
+
+.form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
 </style>

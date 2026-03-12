@@ -36,7 +36,7 @@ defineProps({
 .v-table__wrapper {
   overflow-x: auto;
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
 }
 
 .v-table {
@@ -52,18 +52,24 @@ defineProps({
   text-align: left;
   padding: 10px 16px;
   font-weight: 500;
-  font-size: 13px;
-  color: var(--text-secondary);
+  font-size: 12px;
+  color: var(--text-tertiary);
   border-bottom: 1px solid var(--border-default);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .v-table td {
   padding: 12px 16px;
-  border-bottom: 1px solid var(--border-default);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .v-table tbody tr:last-child td {
   border-bottom: none;
+}
+
+.v-table tbody tr {
+  transition: background var(--transition-fast);
 }
 
 .v-table tbody tr:hover {
@@ -73,6 +79,6 @@ defineProps({
 .v-table__empty {
   text-align: center;
   color: var(--text-tertiary);
-  padding: 40px 16px;
+  padding: 48px 16px;
 }
 </style>

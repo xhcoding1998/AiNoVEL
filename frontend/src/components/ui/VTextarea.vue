@@ -4,6 +4,8 @@ defineProps({
   label: { type: String, default: '' },
   placeholder: { type: String, default: '' },
   rows: { type: Number, default: 4 },
+  minRows: { type: Number, default: 3 },
+  maxHeight: { type: Number, default: 500 },
   error: { type: String, default: '' },
   disabled: { type: Boolean, default: false }
 })
@@ -18,8 +20,9 @@ defineEmits(['update:modelValue'])
       class="v-textarea__field"
       :value="modelValue"
       :placeholder="placeholder"
-      :rows="rows"
+      :rows="Math.max(rows, minRows)"
       :disabled="disabled"
+      :style="{ maxHeight: maxHeight + 'px' }"
       @input="$emit('update:modelValue', $event.target.value)"
     />
     <span v-if="error" class="v-textarea__error">{{ error }}</span>
@@ -30,26 +33,28 @@ defineEmits(['update:modelValue'])
 .v-textarea {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: 6px;
 }
 
 .v-textarea__label {
   font-size: 13px;
   font-weight: 500;
   color: var(--text-secondary);
+  letter-spacing: -0.01em;
 }
 
 .v-textarea__field {
   width: 100%;
   padding: 10px 12px;
-  background: var(--bg-secondary);
+  background: var(--bg-primary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   color: var(--text-primary);
   font-size: 14px;
-  line-height: 1.6;
+  line-height: 1.7;
   resize: vertical;
-  transition: border-color var(--transition-fast);
+  min-height: 80px;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .v-textarea__field::placeholder {
@@ -57,11 +62,16 @@ defineEmits(['update:modelValue'])
 }
 
 .v-textarea__field:focus {
-  border-color: var(--border-focus);
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px var(--accent-blue-subtle);
 }
 
 .v-textarea--error .v-textarea__field {
   border-color: var(--accent-red);
+}
+
+.v-textarea--error .v-textarea__field:focus {
+  box-shadow: 0 0 0 3px var(--accent-red-subtle);
 }
 
 .v-textarea__error {

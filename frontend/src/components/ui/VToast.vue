@@ -38,30 +38,33 @@ const { toasts, removeToast } = useToast()
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 16px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
+  padding: 12px 18px;
+  background: var(--bg-glass);
+  backdrop-filter: var(--backdrop-blur);
+  -webkit-backdrop-filter: var(--backdrop-blur);
+  border: 1px solid var(--border-hover);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   font-size: 13px;
   cursor: pointer;
-  min-width: 240px;
-  max-width: 400px;
+  min-width: 260px;
+  max-width: 420px;
 }
 
 .v-toast__dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
-.v-toast--success .v-toast__dot { background: var(--accent-green); }
-.v-toast--error .v-toast__dot { background: var(--accent-red); }
-.v-toast--info .v-toast__dot { background: var(--accent-blue); }
-.v-toast--warning .v-toast__dot { background: var(--accent-yellow); }
+.v-toast--success .v-toast__dot { background: var(--accent-green); box-shadow: 0 0 6px var(--accent-green-subtle); }
+.v-toast--error .v-toast__dot { background: var(--accent-red); box-shadow: 0 0 6px var(--accent-red-subtle); }
+.v-toast--info .v-toast__dot { background: var(--accent-blue); box-shadow: 0 0 6px var(--accent-blue-subtle); }
+.v-toast--warning .v-toast__dot { background: var(--accent-yellow); box-shadow: 0 0 6px var(--accent-yellow-subtle); }
 
 .v-toast__message {
   color: var(--text-primary);
+  line-height: 1.4;
 }
 </style>

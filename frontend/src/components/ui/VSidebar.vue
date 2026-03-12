@@ -59,6 +59,7 @@ import VBadge from './VBadge.vue'
   left: 0;
   top: 0;
   overflow-y: auto;
+  z-index: var(--z-sticky);
 }
 
 .v-sidebar__header {
@@ -68,33 +69,36 @@ import VBadge from './VBadge.vue'
 
 .v-sidebar__nav {
   flex: 1;
-  padding: var(--space-2) var(--space-2);
+  padding: var(--space-3) var(--space-3);
+  overflow-y: auto;
 }
 
 .v-sidebar__section {
-  padding: var(--space-4) var(--space-3) var(--space-2);
+  padding: var(--space-5) var(--space-3) var(--space-2);
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   color: var(--text-tertiary);
 }
 
 .v-sidebar__divider {
   height: 1px;
   background: var(--border-default);
-  margin: var(--space-2) 0;
+  margin: var(--space-2) var(--space-3);
 }
 
 .v-sidebar__item {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: 8px 12px;
+  padding: 9px 12px;
   border-radius: var(--radius-md);
   font-size: 13px;
+  font-weight: 500;
   color: var(--text-secondary);
   transition: all var(--transition-fast);
+  position: relative;
 }
 
 .v-sidebar__item:hover {
@@ -107,6 +111,18 @@ import VBadge from './VBadge.vue'
   background: var(--bg-active);
 }
 
+.v-sidebar__item--active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 16px;
+  background: var(--accent-primary);
+  border-radius: 0 2px 2px 0;
+}
+
 .v-sidebar__icon {
   width: 18px;
   height: 18px;
@@ -114,6 +130,12 @@ import VBadge from './VBadge.vue'
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.v-sidebar__item--active .v-sidebar__icon,
+.v-sidebar__item:hover .v-sidebar__icon {
+  opacity: 1;
 }
 
 .v-sidebar__icon :deep(svg) {

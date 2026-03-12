@@ -34,7 +34,7 @@ function select(val) {
         <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     </div>
-    <Transition name="fade">
+    <Transition name="dropdown">
       <div v-if="open" class="v-select__dropdown">
         <div
           v-for="opt in options"
@@ -44,6 +44,9 @@ function select(val) {
           @mousedown.prevent="select(opt.value ?? opt)"
         >
           {{ opt.label ?? opt }}
+          <svg v-if="(opt.value ?? opt) === modelValue" class="v-select__check" width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M3 7l3 3 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
         </div>
       </div>
     </Transition>
@@ -55,7 +58,7 @@ function select(val) {
 .v-select {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: 6px;
   position: relative;
 }
 
@@ -63,6 +66,7 @@ function select(val) {
   font-size: 13px;
   font-weight: 500;
   color: var(--text-secondary);
+  letter-spacing: -0.01em;
 }
 
 .v-select__trigger {
@@ -71,17 +75,18 @@ function select(val) {
   justify-content: space-between;
   height: 40px;
   padding: 0 12px;
-  background: var(--bg-secondary);
+  background: var(--bg-primary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: border-color var(--transition-fast);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
   font-size: 14px;
 }
 
 .v-select__trigger:focus,
 .v-select--open .v-select__trigger {
-  border-color: var(--border-focus);
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px var(--accent-blue-subtle);
 }
 
 .v-select__placeholder {
@@ -91,6 +96,7 @@ function select(val) {
 .v-select__arrow {
   color: var(--text-tertiary);
   transition: transform var(--transition-fast);
+  flex-shrink: 0;
 }
 
 .v-select--open .v-select__arrow {
@@ -103,30 +109,42 @@ function select(val) {
   left: 0;
   right: 0;
   margin-top: 4px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
+  background: var(--bg-glass);
+  backdrop-filter: var(--backdrop-blur);
+  -webkit-backdrop-filter: var(--backdrop-blur);
+  border: 1px solid var(--border-hover);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   z-index: var(--z-dropdown);
   padding: 4px;
-  max-height: 200px;
+  max-height: 220px;
   overflow-y: auto;
 }
 
 .v-select__option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 8px 10px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: 14px;
-  transition: background var(--transition-fast);
+  font-size: 13px;
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
 }
 
 .v-select__option:hover {
   background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .v-select__option--active {
   color: var(--accent-blue);
+}
+
+.v-select__check {
+  color: var(--accent-blue);
+  flex-shrink: 0;
 }
 
 .v-select--error .v-select__trigger {

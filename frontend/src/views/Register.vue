@@ -39,8 +39,12 @@ async function handleRegister() {
 
 <template>
   <div class="auth-page">
+    <div class="auth-bg">
+      <div class="auth-bg__gradient" />
+    </div>
     <div class="auth-container">
       <div class="auth-header">
+        <div class="auth-logo-icon">N</div>
         <h1 class="auth-logo">AI Novel</h1>
         <p class="auth-desc">创建你的账号</p>
       </div>
@@ -67,13 +71,30 @@ async function handleRegister() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-primary);
+  position: relative;
+  overflow: hidden;
   padding: var(--space-6);
+}
+
+.auth-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+
+.auth-bg__gradient {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 50% at 50% 0%, rgba(0, 112, 243, 0.06) 0%, transparent 60%),
+    var(--bg-primary);
 }
 
 .auth-container {
   width: 100%;
-  max-width: 380px;
+  max-width: 400px;
+  position: relative;
+  z-index: 1;
 }
 
 .auth-header {
@@ -81,45 +102,61 @@ async function handleRegister() {
   margin-bottom: var(--space-8);
 }
 
+.auth-logo-icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto var(--space-4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--text-primary);
+  border-radius: var(--radius-lg);
+  font-weight: 800;
+  font-size: 24px;
+  color: var(--bg-primary);
+}
+
 .auth-logo {
-  font-size: 28px;
+  font-size: 30px;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
 }
 
 .auth-desc {
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   font-size: 14px;
-  margin-top: var(--space-2);
+  margin-top: var(--space-1);
 }
 
 .auth-form {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-5);
   padding: var(--space-6);
-  background: var(--bg-tertiary);
+  background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
 }
 
 .auth-footer {
   text-align: center;
-  margin-top: var(--space-4);
+  margin-top: var(--space-5);
   font-size: 14px;
 }
 
 .auth-footer__text {
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
 }
 
 .auth-footer__link {
-  color: var(--text-primary);
+  color: var(--accent-blue);
   font-weight: 500;
   margin-left: var(--space-1);
+  transition: color var(--transition-fast);
 }
 
 .auth-footer__link:hover {
-  text-decoration: underline;
+  color: var(--accent-blue-hover);
 }
 </style>

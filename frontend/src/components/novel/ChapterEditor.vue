@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, inject } from 'vue'
 import { useRoute } from 'vue-router'
 import { useNovelStore } from '../../stores/novel'
 import { useToast } from '../../composables/useToast'
@@ -17,6 +17,8 @@ const store = useNovelStore()
 const toast = useToast()
 const { showRegenInput, regenPrompt, regenerating, regenerateSection } = useAIRegenerate()
 const pid = route.params.id
+const dataVersion = inject('dataVersion', ref(0))
+watch(dataVersion, () => loadData())
 
 const showEditor = ref(false)
 const saving = ref(false)
@@ -70,9 +72,13 @@ async function handleRegen() {
 
 <template>
   <div>
-    <!-- Header bar -->
     <div class="section-header">
-      <h3 class="section-title">章节管理</h3>
+      <div class="section-header__left">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3">
+          <rect x="3" y="2" width="12" height="14" rx="2"/><path d="M6 6h6M6 9h4M6 12h2" stroke-linecap="round"/>
+        </svg>
+        <h3 class="section-title" style="margin:0">章节管理</h3>
+      </div>
       <div class="section-header__actions">
         <VButton variant="ghost" size="sm" @click="showRegenInput = !showRegenInput" :loading="regenerating">
           AI 重新生成卷
@@ -97,7 +103,6 @@ async function handleRegen() {
     </p>
 
     <template v-else>
-      <!-- Volume selector -->
       <div class="vol-tabs">
         <button
           v-for="vol in store.volumes"
@@ -111,7 +116,6 @@ async function handleRegen() {
         </button>
       </div>
 
-      <!-- Volume detail card -->
       <VCard v-if="currentVolume" class="vol-detail">
         <div class="vol-detail__head">
           <h4 class="vol-detail__title">{{ currentVolume.title }}</h4>
@@ -126,7 +130,6 @@ async function handleRegen() {
         </div>
       </VCard>
 
-      <!-- Chapter list -->
       <div v-if="store.chapters.length" class="chapter-list">
         <div class="chapter-list__title">章节列表</div>
         <VCard v-for="ch in store.chapters" :key="ch.id" padding="sm" hoverable>
@@ -172,7 +175,18 @@ async function handleRegen() {
   gap: 12px;
 }
 
+.section-header__left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.section-header__left svg {
+  color: var(--text-tertiary);
+}
+
 .section-title {
+  font-family: var(--font-display);
   font-size: 17px;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -210,7 +224,10 @@ async function handleRegen() {
   margin-bottom: 16px;
   overflow-x: auto;
   padding-bottom: 4px;
+  scrollbar-width: none;
 }
+
+.vol-tabs::-webkit-scrollbar { display: none; }
 
 .vol-tab {
   display: flex;
@@ -220,7 +237,7 @@ async function handleRegen() {
   border-radius: var(--radius-md);
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  transition: all 0.15s;
+  transition: all var(--transition-fast);
   cursor: pointer;
   white-space: nowrap;
   min-width: 100px;
@@ -231,8 +248,8 @@ async function handleRegen() {
 }
 
 .vol-tab--active {
-  border-color: var(--accent-blue);
-  background: rgba(0, 112, 243, 0.06);
+  border-color: var(--border-hover);
+  background: var(--bg-active);
 }
 
 .vol-tab__num {
@@ -242,7 +259,7 @@ async function handleRegen() {
 }
 
 .vol-tab--active .vol-tab__num {
-  color: var(--accent-blue);
+  color: var(--text-primary);
 }
 
 .vol-tab__title {
@@ -262,9 +279,11 @@ async function handleRegen() {
 }
 
 .vol-detail__title {
+  font-family: var(--font-display);
   font-size: 15px;
   font-weight: 600;
   line-height: 1.4;
+  letter-spacing: -0.01em;
 }
 
 .vol-detail__section {
@@ -275,7 +294,7 @@ async function handleRegen() {
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   color: var(--text-tertiary);
   margin-bottom: 6px;
   display: block;
@@ -300,17 +319,17 @@ async function handleRegen() {
 }
 
 .chapter-list__title {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-tertiary);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   margin-bottom: 4px;
 }
 
 .chapter-item { cursor: pointer; }
 .chapter-item__head { display: flex; align-items: center; gap: 8px; }
-.chapter-item__num { font-weight: 600; font-size: 13px; color: var(--text-secondary); }
+.chapter-item__num { font-weight: 600; font-size: 13px; color: var(--text-tertiary); }
 .chapter-item__title { font-weight: 500; font-size: 14px; flex: 1; }
 .chapter-item__meta { font-size: 12px; color: var(--text-tertiary); margin-top: 4px; }
 .form-grid { display: flex; flex-direction: column; gap: 16px; }

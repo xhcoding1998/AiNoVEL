@@ -27,7 +27,6 @@ function getStepState(step) {
 
 <template>
   <div class="gen-progress" :class="`gen-progress--${status}`">
-    <!-- Header -->
     <div class="gen-progress__header">
       <div class="gen-progress__title">
         <div v-if="status === 'generating'" class="gen-progress__spinner" />
@@ -39,7 +38,7 @@ function getStepState(step) {
           <circle cx="9" cy="9" r="9" fill="var(--accent-red)" />
           <path d="M6 6l6 6M12 6l-6 6" stroke="#fff" stroke-width="1.5" stroke-linecap="round" />
         </svg>
-        <span>
+        <span class="gen-progress__text">
           <template v-if="status === 'generating'">
             AI 正在生成「{{ stepLabels[currentStep] || currentStep }}」...
           </template>
@@ -69,12 +68,10 @@ function getStepState(step) {
       </div>
     </div>
 
-    <!-- Progress bar -->
     <div class="gen-progress__bar">
       <div class="gen-progress__fill" :style="{ width: progress + '%' }" />
     </div>
 
-    <!-- Steps -->
     <div class="gen-progress__steps">
       <div
         v-for="(step, i) in steps"
@@ -113,21 +110,22 @@ function getStepState(step) {
   border-radius: var(--radius-lg);
   padding: 20px 24px;
   margin-bottom: 24px;
+  transition: all var(--transition-normal);
 }
 
 .gen-progress--generating {
-  border-color: rgba(0, 112, 243, 0.3);
-  background: linear-gradient(135deg, rgba(0, 112, 243, 0.04), rgba(0, 112, 243, 0.02));
+  border-color: rgba(0, 112, 243, 0.2);
+  background: linear-gradient(135deg, rgba(0, 112, 243, 0.03), transparent);
 }
 
 .gen-progress--completed {
-  border-color: rgba(0, 168, 107, 0.3);
-  background: linear-gradient(135deg, rgba(0, 168, 107, 0.04), rgba(0, 168, 107, 0.02));
+  border-color: rgba(0, 168, 107, 0.2);
+  background: linear-gradient(135deg, rgba(0, 168, 107, 0.03), transparent);
 }
 
 .gen-progress--failed {
-  border-color: rgba(238, 68, 68, 0.3);
-  background: linear-gradient(135deg, rgba(238, 68, 68, 0.04), rgba(238, 68, 68, 0.02));
+  border-color: rgba(238, 68, 68, 0.2);
+  background: linear-gradient(135deg, rgba(238, 68, 68, 0.03), transparent);
 }
 
 .gen-progress__header {
@@ -147,11 +145,16 @@ function getStepState(step) {
   font-weight: 600;
 }
 
+.gen-progress__text {
+  letter-spacing: -0.01em;
+}
+
 .gen-progress__pct {
   font-size: 12px;
   font-weight: 500;
   color: var(--text-tertiary);
   margin-left: 4px;
+  font-family: var(--font-mono);
 }
 
 .gen-progress__spinner {
@@ -160,7 +163,7 @@ function getStepState(step) {
   border: 2px solid rgba(0, 112, 243, 0.2);
   border-top-color: var(--accent-blue);
   border-radius: 50%;
-  animation: spin 0.7s linear infinite;
+  animation: gen-spin 0.7s linear infinite;
   flex-shrink: 0;
 }
 
@@ -177,7 +180,7 @@ function getStepState(step) {
   font-size: 13px;
   font-weight: 500;
   border-radius: var(--radius-md);
-  transition: all 0.15s;
+  transition: all var(--transition-fast);
   cursor: pointer;
 }
 
@@ -202,8 +205,8 @@ function getStepState(step) {
 }
 
 .gen-progress__bar {
-  height: 4px;
-  background: var(--bg-hover);
+  height: 3px;
+  background: var(--bg-active);
   border-radius: 2px;
   overflow: hidden;
   margin-bottom: 16px;
@@ -212,7 +215,7 @@ function getStepState(step) {
 .gen-progress__fill {
   height: 100%;
   border-radius: 2px;
-  transition: width 0.5s ease;
+  transition: width 0.5s var(--ease-out-expo);
 }
 
 .gen-progress--generating .gen-progress__fill {
@@ -230,7 +233,7 @@ function getStepState(step) {
 
 .gen-progress__steps {
   display: flex;
-  gap: 4px;
+  gap: 2px;
 }
 
 .gen-step {
@@ -241,15 +244,15 @@ function getStepState(step) {
   gap: 6px;
   padding: 8px 4px;
   border-radius: var(--radius-sm);
-  transition: background 0.15s;
+  transition: background var(--transition-fast);
 }
 
 .gen-step--active {
-  background: rgba(0, 112, 243, 0.08);
+  background: rgba(0, 112, 243, 0.05);
 }
 
 .gen-step--failed {
-  background: rgba(238, 68, 68, 0.08);
+  background: rgba(238, 68, 68, 0.05);
 }
 
 .gen-step__indicator {
@@ -261,7 +264,7 @@ function getStepState(step) {
   justify-content: center;
   font-size: 11px;
   font-weight: 600;
-  transition: all 0.2s;
+  transition: all var(--transition-normal);
 }
 
 .gen-step--done .gen-step__indicator {
@@ -280,7 +283,7 @@ function getStepState(step) {
 }
 
 .gen-step--pending .gen-step__indicator {
-  background: var(--bg-hover);
+  background: var(--bg-active);
   color: var(--text-tertiary);
 }
 
@@ -294,6 +297,7 @@ function getStepState(step) {
 
 .gen-step__num {
   font-size: 11px;
+  font-family: var(--font-mono);
 }
 
 .gen-step__label {
@@ -317,7 +321,7 @@ function getStepState(step) {
   color: var(--accent-red);
 }
 
-@keyframes spin {
+@keyframes gen-spin {
   to { transform: rotate(360deg); }
 }
 

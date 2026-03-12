@@ -1,50 +1,116 @@
+/* Fade */
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity var(--transition-normal);
 }
-
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
 }
 
+/* Slide up */
 .slide-up-enter-active,
 .slide-up-leave-active {
   transition: all var(--transition-normal);
 }
-
 .slide-up-enter-from {
   opacity: 0;
-  transform: translateY(10px);
+  transform: translateY(8px);
 }
-
 .slide-up-leave-to {
   opacity: 0;
-  transform: translateY(-10px);
+  transform: translateY(-8px);
 }
 
+/* Slide right */
 .slide-right-enter-active,
 .slide-right-leave-active {
   transition: all var(--transition-normal);
 }
-
 .slide-right-enter-from {
   opacity: 0;
-  transform: translateX(-20px);
+  transform: translateX(-16px);
 }
-
 .slide-right-leave-to {
   opacity: 0;
-  transform: translateX(20px);
+  transform: translateX(16px);
 }
 
-.scale-enter-active,
+/* Scale (for modals, dropdowns) */
+.scale-enter-active {
+  transition: all 250ms var(--ease-out-expo);
+}
 .scale-leave-active {
-  transition: all var(--transition-fast);
+  transition: all 150ms cubic-bezier(0.25, 0.1, 0.25, 1);
 }
-
-.scale-enter-from,
+.scale-enter-from {
+  opacity: 0;
+  transform: scale(0.96) translateY(4px);
+}
 .scale-leave-to {
   opacity: 0;
-  transform: scale(0.95);
+  transform: scale(0.98);
+}
+
+/* Dropdown specific — for menus that pop up/down */
+.dropdown-enter-active {
+  transition: all 200ms var(--ease-out-expo);
+}
+.dropdown-leave-active {
+  transition: all 120ms cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+.dropdown-enter-from {
+  opacity: 0;
+  transform: translateY(6px) scale(0.97);
+}
+.dropdown-leave-to {
+  opacity: 0;
+  transform: translateY(4px) scale(0.98);
+}
+
+/* Dropdown upward */
+.dropdown-up-enter-active {
+  transition: all 200ms var(--ease-out-expo);
+}
+.dropdown-up-leave-active {
+  transition: all 120ms cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+.dropdown-up-enter-from {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.97);
+}
+.dropdown-up-leave-to {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
+}
+
+/* List stagger helper */
+.list-enter-active,
+.list-leave-active {
+  transition: all var(--transition-normal);
+}
+.list-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.list-leave-to {
+  opacity: 0;
+  transform: translateX(-12px);
+}
+.list-move {
+  transition: transform var(--transition-slow);
+}
+
+/* Expand/collapse */
+.expand-enter-active,
+.expand-leave-active {
+  transition: all var(--transition-normal);
+  overflow: hidden;
+}
+.expand-enter-from,
+.expand-leave-to {
+  opacity: 0;
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
 }

@@ -48,7 +48,7 @@ ul, ol {
   list-style: none;
 }
 
-img, svg {
+img {
   display: block;
   max-width: 100%;
 }
@@ -75,7 +75,18 @@ table {
   background: var(--gray-600);
 }
 
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--gray-700) transparent;
+}
+
 ::selection {
-  background: var(--accent-blue);
+  background: rgba(0, 112, 243, 0.3);
   color: #fff;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }

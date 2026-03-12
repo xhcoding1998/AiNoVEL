@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch, nextTick } from 'vue'
+import { ref, onMounted, watch, nextTick, inject } from 'vue'
 import { useRoute } from 'vue-router'
 import { useNovelStore } from '../../stores/novel'
 import { useToast } from '../../composables/useToast'
@@ -18,6 +18,8 @@ const store = useNovelStore()
 const toast = useToast()
 const { showRegenInput, regenPrompt, regenerating, regenerateSection } = useAIRegenerate()
 const pid = route.params.id
+const dataVersion = inject('dataVersion', ref(0))
+watch(dataVersion, () => loadData())
 
 const { graphData, layout, viewBox } = useGraph(
   () => store.characters,
@@ -88,7 +90,13 @@ const roleColorMap = { male_lead: '#0070f3', female_lead: '#8b5cf6', supporting:
 <template>
   <div>
     <div class="section-header">
-      <h3 class="section-title">人物关系图</h3>
+      <div class="section-header__left">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3">
+          <circle cx="5" cy="7" r="2.5"/><circle cx="13" cy="7" r="2.5"/><circle cx="9" cy="14" r="2.5"/>
+          <path d="M7.3 8l1.7 4.5M10.7 8l-1.7 4.5M7.5 7h3" stroke-linecap="round" opacity="0.5"/>
+        </svg>
+        <h3 class="section-title" style="margin:0">人物关系图</h3>
+      </div>
       <div class="section-header__actions">
         <VButton variant="ghost" size="sm" @click="showRegenInput = !showRegenInput" :loading="regenerating">
           AI 重新生成
@@ -102,7 +110,6 @@ const roleColorMap = { male_lead: '#0070f3', female_lead: '#8b5cf6', supporting:
       <VButton variant="primary" size="sm" :loading="regenerating" @click="handleRegen">生成</VButton>
     </div>
 
-    <!-- Graph -->
     <VCard v-if="graphData.nodes.length" padding="sm" class="graph-card">
       <svg class="relation-svg" :viewBox="viewBox" preserveAspectRatio="xMidYMid meet">
         <defs>
@@ -111,17 +118,32 @@ const roleColorMap = { male_lead: '#0070f3', female_lead: '#8b5cf6', supporting:
           </marker>
         </defs>
         <g v-for="(edge, i) in graphData.edges" :key="'e' + i">
-          <path :d="edgePath(edge.points)" fill="none" stroke="var(--border-hover)" stroke-width="1.5" marker-end="url(#arrowhead)" />
-          <text v-if="edge.label" :x="edgeLabelPos(edge.points).x" :y="edgeLabelPos(edge.points).y - 6" text-anchor="middle" fill="var(--text-tertiary)" font-size="11">{{ edge.label }}</text>
+          <path :d="edgePath(edge.points)" fill="none" stroke="var(--border-hover)" stroke-width="1.2" marker-end="url(#arrowhead)" />
+          <template v-if="edge.label">
+            <rect
+              :x="edgeLabelPos(edge.points).x - edge.label.length * 5.5 - 6"
+              :y="edgeLabelPos(edge.points).y - 16"
+              :width="edge.label.length * 11 + 12"
+              :height="20"
+              rx="4"
+              fill="var(--bg-secondary)"
+              stroke="var(--border-default)"
+              stroke-width="0.5"
+              opacity="0.9"
+            />
+            <text :x="edgeLabelPos(edge.points).x" :y="edgeLabelPos(edge.points).y - 3" text-anchor="middle" fill="var(--text-secondary)" font-size="10" font-weight="500">{{ edge.label }}</text>
+          </template>
         </g>
         <g v-for="node in graphData.nodes" :key="'n' + node.id">
-          <rect :x="node.x - node.width / 2" :y="node.y - node.height / 2" :width="node.width" :height="node.height" rx="8" :fill="roleColorMap[node.data?.role_type] || '#525252'" opacity="0.15" :stroke="roleColorMap[node.data?.role_type] || '#525252'" stroke-width="1" />
-          <text :x="node.x" :y="node.y + 5" text-anchor="middle" fill="var(--text-primary)" font-size="13" font-weight="600">{{ node.label }}</text>
+          <rect :x="node.x - node.width / 2" :y="node.y - node.height / 2" :width="node.width" :height="node.height" rx="8" :fill="roleColorMap[node.data?.role_type] || '#525252'" opacity="0.12" :stroke="roleColorMap[node.data?.role_type] || '#525252'" stroke-width="1" />
+          <text :x="node.x" :y="node.y + 5" text-anchor="middle" fill="var(--text-primary)" font-size="12" font-weight="600">
+            <title>{{ node.label }}</title>
+            {{ node.displayLabel || node.label }}
+          </text>
         </g>
       </svg>
     </VCard>
 
-    <!-- Relation detail list -->
     <div v-if="store.relations.length" class="relation-list">
       <div class="relation-list__title">关系详情 · {{ store.relations.length }} 条</div>
       <VCard v-for="r in store.relations" :key="r.id" padding="sm" class="relation-card">
@@ -198,7 +220,18 @@ const roleColorMap = { male_lead: '#0070f3', female_lead: '#8b5cf6', supporting:
   gap: 12px;
 }
 
+.section-header__left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.section-header__left svg {
+  color: var(--text-tertiary);
+}
+
 .section-title {
+  font-family: var(--font-display);
   font-size: 17px;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -221,9 +254,14 @@ const roleColorMap = { male_lead: '#0070f3', female_lead: '#8b5cf6', supporting:
 
 .graph-card {
   margin-bottom: 24px;
+  overflow: hidden;
 }
 
-.relation-svg { width: 100%; min-height: 350px; max-height: 500px; }
+.relation-svg {
+  width: 100%;
+  min-height: 350px;
+  max-height: 500px;
+}
 
 .relation-list {
   display: flex;
@@ -232,16 +270,12 @@ const roleColorMap = { male_lead: '#0070f3', female_lead: '#8b5cf6', supporting:
 }
 
 .relation-list__title {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-tertiary);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   margin-bottom: 4px;
-}
-
-.relation-card {
-  transition: border-color 0.15s;
 }
 
 .rel-row {
@@ -260,12 +294,14 @@ const roleColorMap = { male_lead: '#0070f3', female_lead: '#8b5cf6', supporting:
 }
 
 .rel-row__from, .rel-row__to {
+  font-family: var(--font-display);
   font-weight: 600;
   font-size: 14px;
 }
 
 .rel-row__arrow {
   flex-shrink: 0;
+  opacity: 0.5;
 }
 
 .rel-row__del {
@@ -273,11 +309,11 @@ const roleColorMap = { male_lead: '#0070f3', female_lead: '#8b5cf6', supporting:
   padding: 4px;
   border-radius: var(--radius-sm);
   opacity: 0;
-  transition: all 0.15s;
+  transition: all var(--transition-fast);
 }
 
 .relation-card:hover .rel-row__del { opacity: 1; }
-.rel-row__del:hover { color: var(--accent-red); background: var(--bg-hover); }
+.rel-row__del:hover { color: var(--accent-red); background: var(--accent-red-subtle); }
 
 .rel-detail {
   margin-top: 12px;
@@ -292,7 +328,7 @@ const roleColorMap = { male_lead: '#0070f3', female_lead: '#8b5cf6', supporting:
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   color: var(--text-tertiary);
   display: block;
   margin-bottom: 4px;

@@ -27,9 +27,14 @@ defineProps({
   transition: all var(--transition-fast);
 }
 
+.v-card--hoverable {
+  cursor: pointer;
+}
+
 .v-card--hoverable:hover {
   border-color: var(--border-hover);
   box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
 }
 
 .v-card--sm .v-card__body { padding: var(--space-3); }

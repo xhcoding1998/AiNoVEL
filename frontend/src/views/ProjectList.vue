@@ -72,9 +72,17 @@ const genStatusMap = {
 
 <template>
   <div class="page-container">
-    <div class="flex items-center justify-between" style="margin-bottom: 24px">
-      <h1 class="page-title" style="margin-bottom:0">我的项目</h1>
-      <VButton variant="primary" @click="showCreate = true">新建项目</VButton>
+    <div class="page-header">
+      <div>
+        <h1 class="page-title" style="margin-bottom: 4px">我的项目</h1>
+        <p class="page-subtitle" style="margin-bottom: 0">管理和创建你的小说项目</p>
+      </div>
+      <VButton variant="primary" @click="showCreate = true">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="margin-right: 6px">
+          <path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        新建项目
+      </VButton>
     </div>
 
     <VLoading v-if="store.loading" text="加载中..." />
@@ -89,7 +97,7 @@ const genStatusMap = {
               @select="deleteProject(proj.id)"
             >
               <template #trigger>
-                <button class="project-item__more" @click.stop>
+                <button class="project-item__more">
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                     <circle cx="8" cy="3" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="13" r="1.5"/>
                   </svg>
@@ -116,7 +124,15 @@ const genStatusMap = {
     </div>
 
     <div v-else class="empty">
-      <p>还没有项目，输入一段创意开始创作</p>
+      <div class="empty__icon">
+        <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+          <rect x="8" y="6" width="32" height="36" rx="4" stroke="var(--text-tertiary)" stroke-width="1.5" fill="none"/>
+          <path d="M16 18h16M16 24h12M16 30h8" stroke="var(--text-tertiary)" stroke-width="1.5" stroke-linecap="round"/>
+          <circle cx="36" cy="36" r="8" fill="var(--accent-blue)" opacity="0.15"/>
+          <path d="M36 33v6M33 36h6" stroke="var(--accent-blue)" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <p class="empty__text">还没有项目，输入一段创意开始创作</p>
       <VButton variant="primary" @click="showCreate = true">创建第一个项目</VButton>
     </div>
 
@@ -146,9 +162,17 @@ const genStatusMap = {
 </template>
 
 <style scoped>
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: var(--space-6);
+  gap: var(--space-4);
+}
+
 .project-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: var(--space-4);
 }
 
@@ -164,24 +188,33 @@ const genStatusMap = {
 }
 
 .project-item__name {
+  font-family: var(--font-display);
   font-size: 15px;
   font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .project-item__prompt {
   font-size: 13px;
   color: var(--text-tertiary);
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-4);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  line-height: 1.5;
 }
 
 .project-item__more {
   color: var(--text-tertiary);
   padding: 4px;
   border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  opacity: 0;
+}
+
+.project-item:hover .project-item__more {
+  opacity: 1;
 }
 
 .project-item__more:hover {
@@ -202,12 +235,20 @@ const genStatusMap = {
 
 .empty {
   text-align: center;
-  padding: 60px 0;
-  color: var(--text-secondary);
+  padding: 80px 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--space-4);
+}
+
+.empty__icon {
+  margin-bottom: var(--space-2);
+}
+
+.empty__text {
+  color: var(--text-tertiary);
+  font-size: 14px;
 }
 
 .create-form {
@@ -220,5 +261,8 @@ const genStatusMap = {
   font-size: 12px;
   color: var(--text-tertiary);
   line-height: 1.5;
+  padding: var(--space-3);
+  background: var(--bg-hover);
+  border-radius: var(--radius-md);
 }
 </style>
