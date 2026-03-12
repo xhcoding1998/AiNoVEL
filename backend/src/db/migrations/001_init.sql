@@ -121,7 +121,7 @@ CREATE TABLE IF NOT EXISTS writing_style (
   writing_style TEXT DEFAULT '',
   character_voice JSONB DEFAULT '{}',
   rhythm_requirement TEXT DEFAULT '',
-  romance_ratio VARCHAR(20) DEFAULT '',
+  romance_ratio TEXT DEFAULT '',
   taboos TEXT DEFAULT '',
   red_lines TEXT DEFAULT '',
   updated_at TIMESTAMP DEFAULT NOW()

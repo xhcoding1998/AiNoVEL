@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch, inject } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, inject } from 'vue'
 import { useRoute } from 'vue-router'
 import { useNovelStore } from '../../stores/novel'
 import { useToast } from '../../composables/useToast'
@@ -25,7 +25,43 @@ const showEditor = ref(false)
 const saving = ref(false)
 const selectedVolume = ref(null)
 const generatingChapters = ref(false)
-const generatingContent = ref(null)
+const generatingChaptersTaskId = ref(null)
+const generatingContentMap = ref({})
+const pollTimers = ref({})
+
+const STORAGE_KEY = `ai_chapter_tasks_${pid}`
+
+function persistTasks() {
+  const data = {}
+  if (generatingChaptersTaskId.value) {
+    data._vol = { taskId: generatingChaptersTaskId.value, volumeId: selectedVolume.value }
+  }
+  for (const [chId, taskId] of Object.entries(generatingContentMap.value)) {
+    data[chId] = taskId
+  }
+  if (Object.keys(data).length) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  } else {
+    localStorage.removeItem(STORAGE_KEY)
+  }
+}
+
+function loadPersistedTasks() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+
+function clearTaskPersistence(key) {
+  const data = loadPersistedTasks() || {}
+  delete data[key]
+  if (Object.keys(data).length) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  } else {
+    localStorage.removeItem(STORAGE_KEY)
+  }
+}
 
 const chapterForm = ref({ id: null, volume_id: null, chapter_number: 1, title: '', content: '', status: 'draft' })
 
@@ -39,6 +75,14 @@ const currentVolume = computed(() => {
   return store.volumes.find(v => v.id === selectedVolume.value)
 })
 
+function isChapterGenerating(chId) {
+  return !!generatingContentMap.value[chId]
+}
+
+const hasAnyGenerating = computed(() => {
+  return generatingChapters.value || Object.keys(generatingContentMap.value).length > 0
+})
+
 async function loadData() {
   await store.fetchVolumes(pid)
   if (store.volumes.length) {
@@ -47,7 +91,59 @@ async function loadData() {
   }
 }
 
-onMounted(loadData)
+async function restoreRunningTasks() {
+  const persisted = loadPersistedTasks()
+  if (!persisted) return
+
+  if (persisted._vol) {
+    const { taskId, volumeId } = persisted._vol
+    try {
+      const res = await aiApi.getTask(pid, taskId)
+      if (res.data.status === 'running') {
+        generatingChapters.value = true
+        generatingChaptersTaskId.value = taskId
+        if (volumeId) selectedVolume.value = volumeId
+        pollChapterOutlines(taskId)
+      } else {
+        clearTaskPersistence('_vol')
+        if (res.data.status === 'completed') {
+          await store.fetchChapters(pid, selectedVolume.value)
+        }
+      }
+    } catch {
+      clearTaskPersistence('_vol')
+    }
+  }
+
+  for (const [chId, taskId] of Object.entries(persisted)) {
+    if (chId === '_vol') continue
+    try {
+      const res = await aiApi.getTask(pid, taskId)
+      if (res.data.status === 'running') {
+        generatingContentMap.value[chId] = taskId
+        pollChapterContent(taskId, Number(chId))
+      } else {
+        clearTaskPersistence(chId)
+        if (res.data.status === 'completed') {
+          await store.fetchChapters(pid, selectedVolume.value)
+        }
+      }
+    } catch {
+      clearTaskPersistence(chId)
+    }
+  }
+}
+
+onMounted(async () => {
+  await loadData()
+  await restoreRunningTasks()
+})
+
+onUnmounted(() => {
+  for (const timer of Object.values(pollTimers.value)) {
+    clearInterval(timer)
+  }
+})
 
 async function switchVolume(vid) {
   selectedVolume.value = vid
@@ -72,7 +168,6 @@ async function deleteChapter(ch) {
   if (!confirm(`确定删除「${ch.title || '第' + ch.chapter_number + '章'}」？`)) return
   try {
     const { novelApi } = await import('../../api/novel')
-    // Use the chapters endpoint if available, otherwise manual
     await novelApi.saveChapter(pid, { ...ch, _delete: true })
     toast.success('已删除')
     await store.fetchChapters(pid, selectedVolume.value)
@@ -85,58 +180,82 @@ async function handleRegen() {
   await regenerateSection(pid, 'volumes', loadData)
 }
 
+function pollChapterOutlines(taskId) {
+  const key = `vol_${taskId}`
+  if (pollTimers.value[key]) clearInterval(pollTimers.value[key])
+  pollTimers.value[key] = setInterval(async () => {
+    try {
+      const res = await aiApi.getTask(pid, taskId)
+      if (res.data.status === 'completed') {
+        clearInterval(pollTimers.value[key])
+        delete pollTimers.value[key]
+        generatingChapters.value = false
+        generatingChaptersTaskId.value = null
+        clearTaskPersistence('_vol')
+        toast.success('章节大纲生成完成')
+        await store.fetchChapters(pid, selectedVolume.value)
+      } else if (res.data.status === 'failed') {
+        clearInterval(pollTimers.value[key])
+        delete pollTimers.value[key]
+        generatingChapters.value = false
+        generatingChaptersTaskId.value = null
+        clearTaskPersistence('_vol')
+        toast.error('大纲生成失败: ' + (res.data.result || '未知错误'))
+      }
+    } catch { /* continue polling */ }
+  }, 3000)
+}
+
+function pollChapterContent(taskId, chapterId) {
+  const key = `ch_${chapterId}`
+  if (pollTimers.value[key]) clearInterval(pollTimers.value[key])
+  pollTimers.value[key] = setInterval(async () => {
+    try {
+      const res = await aiApi.getTask(pid, taskId)
+      if (res.data.status === 'completed') {
+        clearInterval(pollTimers.value[key])
+        delete pollTimers.value[key]
+        delete generatingContentMap.value[chapterId]
+        clearTaskPersistence(String(chapterId))
+        toast.success('正文生成完成')
+        await store.fetchChapters(pid, selectedVolume.value)
+      } else if (res.data.status === 'failed') {
+        clearInterval(pollTimers.value[key])
+        delete pollTimers.value[key]
+        delete generatingContentMap.value[chapterId]
+        clearTaskPersistence(String(chapterId))
+        toast.error('正文生成失败: ' + (res.data.result || '未知错误'))
+      }
+    } catch { /* continue polling */ }
+  }, 3000)
+}
+
 async function generateChaptersForVolume() {
   if (!selectedVolume.value) return
   generatingChapters.value = true
   try {
     const task = await aiApi.generateVolumeChapters(pid, selectedVolume.value, regenPrompt.value.trim() || undefined)
-    toast.success('AI 正在生成章节大纲...')
-
-    for (let i = 0; i < 60; i++) {
-      await new Promise(r => setTimeout(r, 2500))
-      const res = await aiApi.getTask(pid, task.data.id)
-      if (res.data.status === 'completed') {
-        toast.success('章节大纲生成完成')
-        await store.fetchChapters(pid, selectedVolume.value)
-        return
-      }
-      if (res.data.status === 'failed') {
-        toast.error('生成失败: ' + (res.data.result || '未知错误'))
-        return
-      }
-    }
-    toast.warning('生成超时，请刷新查看')
+    generatingChaptersTaskId.value = task.data.id
+    persistTasks()
+    toast.info('AI 正在生成章节大纲，可以离开页面稍后回来查看')
+    pollChapterOutlines(task.data.id)
   } catch (err) {
-    toast.error(err?.error || '生成失败')
-  } finally {
     generatingChapters.value = false
+    toast.error(err?.error || '生成失败')
   }
 }
 
 async function generateContent(ch) {
-  generatingContent.value = ch.id
+  generatingContentMap.value[ch.id] = true
   try {
     const task = await aiApi.generateChapterContent(pid, ch.id)
-    toast.success(`正在生成「${ch.title}」正文...`)
-
-    for (let i = 0; i < 120; i++) {
-      await new Promise(r => setTimeout(r, 3000))
-      const res = await aiApi.getTask(pid, task.data.id)
-      if (res.data.status === 'completed') {
-        toast.success('正文生成完成')
-        await store.fetchChapters(pid, selectedVolume.value)
-        return
-      }
-      if (res.data.status === 'failed') {
-        toast.error('生成失败: ' + (res.data.result || '未知错误'))
-        return
-      }
-    }
-    toast.warning('生成超时')
+    generatingContentMap.value[ch.id] = task.data.id
+    persistTasks()
+    toast.info(`正在生成「${ch.title}」正文，可以继续其他操作`)
+    pollChapterContent(task.data.id, ch.id)
   } catch (err) {
+    delete generatingContentMap.value[ch.id]
     toast.error(err?.error || '生成失败')
-  } finally {
-    generatingContent.value = null
   }
 }
 
@@ -227,28 +346,44 @@ const totalWords = computed(() => {
           <span class="chapter-list__words">{{ totalWords.toLocaleString() }} 字</span>
         </div>
         <VCard v-for="ch in store.chapters" :key="ch.id" padding="sm" hoverable>
-          <div class="chapter-item">
+          <div class="chapter-item" :class="{ 'chapter-item--generating': isChapterGenerating(ch.id) }">
             <div class="chapter-item__head" @click="openEdit(ch)">
               <span class="chapter-item__num">第{{ ch.chapter_number }}章</span>
               <span class="chapter-item__title">{{ ch.title || '无标题' }}</span>
-              <VBadge :variant="statusVariantMap[ch.status] || 'default'">
+              <VBadge v-if="isChapterGenerating(ch.id)" variant="warning">
+                <span class="gen-badge">
+                  <span class="gen-badge__dot" />
+                  生成中
+                </span>
+              </VBadge>
+              <VBadge v-else :variant="statusVariantMap[ch.status] || 'default'">
                 {{ statusOptions.find(s => s.value === ch.status)?.label || ch.status }}
               </VBadge>
             </div>
             <div class="chapter-item__bottom">
-              <span v-if="ch.word_count" class="chapter-item__meta">{{ ch.word_count.toLocaleString() }} 字</span>
-              <div class="chapter-item__actions">
+              <span v-if="isChapterGenerating(ch.id)" class="chapter-item__gen-hint">AI 正在撰写正文，可离开页面稍后查看</span>
+              <span v-else-if="ch.word_count" class="chapter-item__meta">{{ ch.word_count.toLocaleString() }} 字</span>
+              <span v-else />
+              <div class="chapter-item__actions" :class="{ 'chapter-item__actions--visible': isChapterGenerating(ch.id) }">
                 <VButton
-                  v-if="isOutlineOnly(ch)"
+                  v-if="isOutlineOnly(ch) && !isChapterGenerating(ch.id)"
                   variant="ghost"
                   size="sm"
-                  :loading="generatingContent === ch.id"
-                  :disabled="generatingContent !== null && generatingContent !== ch.id"
+                  :disabled="hasAnyGenerating"
                   @click.stop="generateContent(ch)"
                 >
                   AI 写正文
                 </VButton>
-                <button class="chapter-item__edit" @click="openEdit(ch)">
+                <VButton
+                  v-if="isChapterGenerating(ch.id)"
+                  variant="ghost"
+                  size="sm"
+                  loading
+                  disabled
+                >
+                  生成中...
+                </VButton>
+                <button v-if="!isChapterGenerating(ch.id)" class="chapter-item__edit" @click="openEdit(ch)">
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3">
                     <path d="M8.5 2.5l3 3M2 9l6-6 3 3-6 6H2V9z" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
@@ -454,7 +589,41 @@ const totalWords = computed(() => {
   font-family: var(--font-mono);
 }
 
-.chapter-item { cursor: pointer; }
+.chapter-item { cursor: pointer; transition: all var(--transition-fast); }
+
+.chapter-item--generating {
+  border-left: 2px solid var(--accent-blue);
+  padding-left: 8px;
+}
+
+.gen-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.gen-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: gen-pulse 1.2s ease infinite;
+}
+
+.chapter-item__gen-hint {
+  font-size: 12px;
+  color: var(--accent-blue);
+  font-style: italic;
+}
+
+.chapter-item__actions--visible {
+  opacity: 1 !important;
+}
+
+@keyframes gen-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
 
 .chapter-item__head {
   display: flex;
