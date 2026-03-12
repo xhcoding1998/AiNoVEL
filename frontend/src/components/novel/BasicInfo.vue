@@ -2,6 +2,7 @@
 import { ref, onMounted, watch, inject } from 'vue'
 import { useRoute } from 'vue-router'
 import { useNovelStore } from '../../stores/novel'
+import { useProjectStore } from '../../stores/project'
 import { useToast } from '../../composables/useToast'
 import { useAIRegenerate } from '../../composables/useAIRegenerate'
 import VInput from '../ui/VInput.vue'
@@ -12,6 +13,7 @@ import VCard from '../ui/VCard.vue'
 
 const route = useRoute()
 const store = useNovelStore()
+const projectStore = useProjectStore()
 const toast = useToast()
 const { showRegenInput, regenPrompt, regenerating, regenerateSection } = useAIRegenerate()
 const dataVersion = inject('dataVersion', ref(0))
@@ -47,6 +49,9 @@ async function save() {
   saving.value = true
   try {
     await store.saveBasicInfo(pid, form.value)
+    if (form.value.book_name) {
+      await projectStore.fetchProject(pid)
+    }
     toast.success('已保存')
   } catch { toast.error('保存失败') }
   finally { saving.value = false }

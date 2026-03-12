@@ -47,8 +47,11 @@ onMounted(() => nextTick(updateIndicator))
   gap: 0;
   position: relative;
   border-bottom: 1px solid var(--border-default);
+  background: var(--bg-primary);
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 .v-tabs::-webkit-scrollbar {
@@ -65,6 +68,7 @@ onMounted(() => nextTick(updateIndicator))
   white-space: nowrap;
   position: relative;
   letter-spacing: -0.01em;
+  flex-shrink: 0;
 }
 
 .v-tabs__item:hover {

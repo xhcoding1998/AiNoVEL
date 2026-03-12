@@ -98,10 +98,12 @@ async function handleRegen() {
           <div class="char-card__top">
             <VAvatar :name="char.name" :color="char.avatar_color" :size="38" />
             <div class="char-card__info">
-              <span class="char-card__name">{{ char.name }}</span>
-              <VBadge :variant="roleVariantMap[char.role_type] || 'default'">
-                {{ roleLabelMap[char.role_type] || char.role_type }}
-              </VBadge>
+              <span class="char-card__name" :title="char.name">{{ char.name }}</span>
+              <span class="char-card__badge">
+                <VBadge :variant="roleVariantMap[char.role_type] || 'default'">
+                  {{ roleLabelMap[char.role_type] || char.role_type }}
+                </VBadge>
+              </span>
             </div>
             <button class="char-card__del" @click.stop="deleteChar(char.id)">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8" stroke-linecap="round"/></svg>
@@ -177,10 +179,17 @@ async function handleRegen() {
   display: flex;
   align-items: center;
   gap: var(--space-3);
+  min-width: 0;
+}
+
+.char-card__top > *:first-child,
+.char-card__del {
+  flex-shrink: 0;
 }
 
 .char-card__info {
   flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -191,6 +200,14 @@ async function handleRegen() {
   font-weight: 600;
   font-size: 14px;
   letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.char-card__badge {
+  flex-shrink: 0;
 }
 
 .char-card__del {

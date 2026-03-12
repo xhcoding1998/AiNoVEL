@@ -113,30 +113,47 @@ const roleColorMap = { male_lead: '#0070f3', female_lead: '#8b5cf6', supporting:
     <VCard v-if="graphData.nodes.length" padding="sm" class="graph-card">
       <svg class="relation-svg" :viewBox="viewBox" preserveAspectRatio="xMidYMid meet">
         <defs>
-          <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-            <polygon points="0 0, 8 3, 0 6" fill="var(--text-tertiary)" />
+          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="relation-arrow" />
           </marker>
+          <filter id="node-shadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.15" />
+          </filter>
         </defs>
         <g v-for="(edge, i) in graphData.edges" :key="'e' + i">
-          <path :d="edgePath(edge.points)" fill="none" stroke="var(--border-hover)" stroke-width="1.2" marker-end="url(#arrowhead)" />
+          <path :d="edgePath(edge.points)" fill="none" class="relation-edge" stroke-width="1.5" marker-end="url(#arrowhead)" />
           <template v-if="edge.label">
             <rect
-              :x="edgeLabelPos(edge.points).x - edge.label.length * 5.5 - 6"
-              :y="edgeLabelPos(edge.points).y - 16"
-              :width="edge.label.length * 11 + 12"
-              :height="20"
-              rx="4"
-              fill="var(--bg-secondary)"
-              stroke="var(--border-default)"
-              stroke-width="0.5"
-              opacity="0.9"
+              :x="edgeLabelPos(edge.points).x - edge.label.length * 5.5 - 8"
+              :y="edgeLabelPos(edge.points).y - 18"
+              :width="edge.label.length * 11 + 16"
+              :height="22"
+              rx="6"
+              class="relation-edge-label-bg"
             />
-            <text :x="edgeLabelPos(edge.points).x" :y="edgeLabelPos(edge.points).y - 3" text-anchor="middle" fill="var(--text-secondary)" font-size="10" font-weight="500">{{ edge.label }}</text>
+            <text :x="edgeLabelPos(edge.points).x" :y="edgeLabelPos(edge.points).y - 2" text-anchor="middle" class="relation-edge-label" font-size="11" font-weight="500">{{ edge.label }}</text>
           </template>
         </g>
-        <g v-for="node in graphData.nodes" :key="'n' + node.id">
-          <rect :x="node.x - node.width / 2" :y="node.y - node.height / 2" :width="node.width" :height="node.height" rx="8" :fill="roleColorMap[node.data?.role_type] || '#525252'" opacity="0.12" :stroke="roleColorMap[node.data?.role_type] || '#525252'" stroke-width="1" />
-          <text :x="node.x" :y="node.y + 5" text-anchor="middle" fill="var(--text-primary)" font-size="12" font-weight="600">
+        <g v-for="node in graphData.nodes" :key="'n' + node.id" filter="url(#node-shadow)">
+          <rect
+            :x="node.x - node.width / 2"
+            :y="node.y - node.height / 2"
+            :width="node.width"
+            :height="node.height"
+            rx="10"
+            class="relation-node-bg"
+            :style="{ '--node-color': roleColorMap[node.data?.role_type] || '#525252' }"
+          />
+          <rect
+            :x="node.x - node.width / 2"
+            :y="node.y - node.height / 2"
+            :width="node.width"
+            :height="node.height"
+            rx="10"
+            class="relation-node-border"
+            :style="{ '--node-color': roleColorMap[node.data?.role_type] || '#525252' }"
+          />
+          <text :x="node.x" :y="node.y + 5" text-anchor="middle" class="relation-node-label" font-size="13" font-weight="600">
             <title>{{ node.label }}</title>
             {{ node.displayLabel || node.label }}
           </text>
@@ -255,12 +272,51 @@ const roleColorMap = { male_lead: '#0070f3', female_lead: '#8b5cf6', supporting:
 .graph-card {
   margin-bottom: 24px;
   overflow: hidden;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-lg);
 }
 
 .relation-svg {
   width: 100%;
-  min-height: 350px;
-  max-height: 500px;
+  min-height: 380px;
+  max-height: 520px;
+  display: block;
+}
+
+.relation-arrow {
+  fill: var(--text-secondary);
+}
+
+.relation-edge {
+  stroke: var(--border-hover);
+  transition: stroke 0.2s ease;
+}
+
+.relation-edge-label-bg {
+  fill: var(--bg-elevated);
+  stroke: var(--border-default);
+  stroke-width: 1;
+}
+
+.relation-edge-label {
+  fill: var(--text-primary);
+}
+
+.relation-node-bg {
+  fill: var(--node-color);
+  opacity: 0.14;
+}
+
+.relation-node-border {
+  fill: none;
+  stroke: var(--node-color);
+  stroke-width: 2;
+  opacity: 0.85;
+}
+
+.relation-node-label {
+  fill: var(--text-primary);
+  font-family: var(--font-display);
 }
 
 .relation-list {

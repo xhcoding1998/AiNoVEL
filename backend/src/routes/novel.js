@@ -32,6 +32,9 @@ novel.put('/:id/basic-info', async (c) => {
       updated_at = NOW()
     WHERE project_id = ${pid} RETURNING *
   `
+  if (body.book_name != null && body.book_name !== '') {
+    await sql`UPDATE projects SET name = ${body.book_name}, updated_at = NOW() WHERE id = ${pid}`
+  }
   return c.json({ data })
 })
 

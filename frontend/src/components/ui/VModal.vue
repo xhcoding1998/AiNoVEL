@@ -55,6 +55,9 @@ function close() {
 
 .v-modal {
   width: 100%;
+  max-height: calc(100vh - var(--space-6) * 2);
+  display: flex;
+  flex-direction: column;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-hover);
   border-radius: var(--radius-xl);
@@ -67,6 +70,7 @@ function close() {
   justify-content: space-between;
   padding: var(--space-5) var(--space-6);
   border-bottom: 1px solid var(--border-default);
+  flex-shrink: 0;
 }
 
 .v-modal__title {
@@ -90,6 +94,9 @@ function close() {
 
 .v-modal__body {
   padding: var(--space-6);
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
 }
 
 .v-modal__footer {
@@ -98,5 +105,6 @@ function close() {
   gap: var(--space-3);
   padding: var(--space-4) var(--space-6);
   border-top: 1px solid var(--border-default);
+  flex-shrink: 0;
 }
 </style>

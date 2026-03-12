@@ -348,7 +348,7 @@ const formattedContent = computed(() => {
 .preview-article__body {
   font-size: 16px;
   line-height: 1.9;
-  color: var(--gray-300);
+  color: var(--text-primary);
 }
 
 .preview-article__body :deep(p) {
