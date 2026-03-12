@@ -25,11 +25,11 @@ async function triggerStepByStep(projectId, prompt, userConfig) {
       } catch { /* first run */ }
 
       const STEP_MAX_TOKENS = {
-        basic_info: 4096, world_building: 8192, characters: 8192,
-        relations: 8192, plot_control: 8192, volumes: 8192, writing_style: 4096
+        basic_info: 4096, world_building: 128000, characters: 128000,
+        relations: 128000, plot_control: 128000, volumes: 128000, writing_style: 128000
       }
       const systemPrompt = buildStepPrompt(step, prompt, existingMaterial)
-      const maxTokens = STEP_MAX_TOKENS[step] || 8192
+      const maxTokens = STEP_MAX_TOKENS[step] || 128000
       const result = await callAI(userConfig, systemPrompt, prompt, { json_mode: true, max_tokens: maxTokens })
 
       await parseAndSaveSection(projectId, step, result)

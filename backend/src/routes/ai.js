@@ -246,12 +246,12 @@ ai.get('/:id/preview', async (c) => {
 
 const STEP_MAX_TOKENS = {
   basic_info: 4096,
-  world_building: 8192,
-  characters: 8192,
-  relations: 8192,
-  plot_control: 8192,
-  volumes: 8192,
-  writing_style: 4096
+  world_building: 128000,
+  characters: 128000,
+  relations: 128000,
+  plot_control: 128000,
+  volumes: 128000,
+  writing_style: 128000
 }
 
 async function processStepByStep(taskId, projectId, prompt, userConfig, startIdx) {
