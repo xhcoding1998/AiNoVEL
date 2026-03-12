@@ -98,7 +98,7 @@ async function tryChatCompletionsAPI(baseUrl, apiKey, model, systemPrompt, userP
       { role: 'user', content: userPrompt }
     ],
     temperature: options.temperature ?? 0.8,
-    max_tokens: options.max_tokens ?? 8192
+    max_tokens: options.max_tokens ?? 128000
   }
 
   if (options.json_mode) {
@@ -227,10 +227,13 @@ JSON 结构：
 function buildRelationsPrompt(userPrompt, existing) {
   const charNames = existing?.characters?.map(c => c.name) || []
   const charHint = charNames.length
-    ? `\n\n【当前角色列表】：${charNames.join('、')}\nfrom_name 和 to_name 必须使用以上角色名。`
+    ? `\n\n【当前角色列表】：${charNames.join('、')}\n⚠️ from_name 和 to_name 必须严格使用以上角色名，一个字都不能多不能少。`
     : ''
 
-  return `你是一位人物关系架构师，擅长设计复杂的人物关系网。请基于已有角色设定，构建一张有张力、有悬念的人物关系网。
+  // Only include a compact summary of existing material to save tokens
+  const compactContext = existing ? buildCompactContext(existing) : ''
+
+  return `你是一位人物关系架构师。基于已有角色设定构建人物关系网。
 
 ${JSON_RULE}
 
@@ -238,24 +241,38 @@ JSON 结构：
 {
   "relations": [
     {
-      "from_name": "角色A名字",
-      "to_name": "角色B名字",
-      "relation_type": "关系类型（同盟/敌对/恋人/暗恋/虐恋/亲属/上下级/师徒/挚友/竞争/利用/监视/宿命/对照）",
-      "faction": "所属阵营（同阵营/敌对阵营/表面同阵营实则对立/无阵营）",
-      "interest_link": "利益链（100字以上，描述两人之间具体的利益纠葛：谁需要谁什么、交换条件是什么、利益冲突点在哪）",
-      "emotion_link": "情感链（100字以上，描述两人情感关系的复杂性：表面关系vs真实关系、情感转折点、潜在的背叛或牺牲可能）",
-      "description": "关系动态（100字以上，描述：①关系的发展轨迹 ②关键转折事件 ③读者期待的名场面）"
+      "from_name": "角色A名字（必须精确匹配角色列表中的名字）",
+      "to_name": "角色B名字（必须精确匹配角色列表中的名字）",
+      "relation_type": "同盟/敌对/恋人/暗恋/虐恋/亲属/上下级/师徒/挚友/竞争/利用/监视/宿命/对照",
+      "faction": "阵营",
+      "interest_link": "利益链（50字左右）",
+      "emotion_link": "情感链（50字左右）",
+      "description": "关系动态（50字左右）"
     }
   ]
 }
 
 要求：
-1. 每对主要角色之间都要有关系定义，至少 8-12 条关系
-2. 避免简单的好人/坏人二分法，关系要有灰色地带
-3. 必须包含至少 2 条"表里不一"的关系（表面友好实则敌对，或表面敌对实则守护）
-4. 必须有一条会在故事中发生反转的关系
-5. 利益链和情感链要具体，不要空泛
-6. 关系描述要暗示读者期待的高光名场面${charHint}${contextBlock(existing)}`
+1. 至少 6-10 条关系，覆盖所有主要角色
+2. 关系要有灰色地带，包含至少 1 条"表里不一"的关系
+3. 利益链和情感链要具体
+4. from_name 和 to_name 必须与角色列表中的名字完全一致${charHint}${compactContext}`
+}
+
+function buildCompactContext(existing) {
+  if (!existing || Object.keys(existing).length === 0) return ''
+  const parts = []
+  if (existing.basic_info) {
+    parts.push(`书名: ${existing.basic_info.book_name || ''}, 类型: ${existing.basic_info.genre || ''}`)
+  }
+  if (existing.characters?.length) {
+    parts.push(`角色: ${existing.characters.map(c => `${c.name}(${c.role_type})`).join(', ')}`)
+  }
+  if (existing.world_building) {
+    const wb = existing.world_building
+    parts.push(`世界观: ${(wb.era_setting || '').slice(0, 100)}`)
+  }
+  return parts.length ? `\n\n【已有物料摘要】\n${parts.join('\n')}` : ''
 }
 
 function buildPlotControlPrompt(userPrompt, existing) {

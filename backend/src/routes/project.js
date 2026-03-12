@@ -25,7 +25,7 @@ async function triggerStepByStep(projectId, prompt, userConfig) {
       } catch { /* first run */ }
 
       const systemPrompt = buildStepPrompt(step, prompt, existingMaterial)
-      const result = await callAI(userConfig, systemPrompt, prompt, { json_mode: true, max_tokens: 8192 })
+      const result = await callAI(userConfig, systemPrompt, prompt, { json_mode: true, max_tokens: 128000 })
 
       await parseAndSaveSection(projectId, step, result)
       await compileMaterial(projectId)

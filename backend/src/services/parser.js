@@ -8,11 +8,39 @@ function pickColor(index) {
 
 function extractJson(text) {
   let cleaned = text.trim()
-  // Strip markdown code fences if present
   if (cleaned.startsWith('```')) {
     cleaned = cleaned.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
   }
-  return JSON.parse(cleaned)
+  try {
+    return JSON.parse(cleaned)
+  } catch (firstErr) {
+    // Attempt to recover truncated JSON by closing open brackets
+    let recovered = cleaned
+    const opens = { '{': 0, '[': 0 }
+    let inString = false, escaped = false
+    for (const ch of recovered) {
+      if (escaped) { escaped = false; continue }
+      if (ch === '\\') { escaped = true; continue }
+      if (ch === '"') { inString = !inString; continue }
+      if (inString) continue
+      if (ch === '{') opens['{']++
+      else if (ch === '}') opens['{']--
+      else if (ch === '[') opens['[']++
+      else if (ch === ']') opens['[']--
+    }
+    if (inString) recovered += '"'
+    // Remove trailing partial value (after last complete comma or colon)
+    recovered = recovered.replace(/,\s*"[^"]*"?\s*:\s*"?[^"{}[\]]*$/, '')
+    recovered = recovered.replace(/,\s*\{[^}]*$/, '')
+    recovered = recovered.replace(/,\s*"[^"]*$/, '')
+    for (let i = 0; i < opens['[']; i++) recovered += ']'
+    for (let i = 0; i < opens['{']; i++) recovered += '}'
+    try {
+      return JSON.parse(recovered)
+    } catch {
+      throw firstErr
+    }
+  }
 }
 
 export async function parseAndSaveAll(projectId, aiRawResult) {
@@ -140,20 +168,57 @@ async function saveCharacters(projectId, characters) {
   return nameToId
 }
 
+function fuzzyMatchName(name, nameToId) {
+  if (!name) return null
+  const trimmed = name.trim()
+  // Exact match
+  if (nameToId[trimmed]) return nameToId[trimmed]
+  // Strip common AI-added decorations: quotes, brackets, 「」, 【】
+  const stripped = trimmed.replace(/[「」【】""''《》\[\]()（）]/g, '').trim()
+  if (nameToId[stripped]) return nameToId[stripped]
+  // Try matching against all known names
+  const names = Object.keys(nameToId)
+  // Case: known name is a substring of AI name, or vice versa
+  for (const known of names) {
+    if (stripped.includes(known) || known.includes(stripped)) {
+      return nameToId[known]
+    }
+  }
+  // Fallback: longest common prefix ≥ 2 chars
+  for (const known of names) {
+    let common = 0
+    for (let i = 0; i < Math.min(stripped.length, known.length); i++) {
+      if (stripped[i] === known[i]) common++
+      else break
+    }
+    if (common >= 2 && common >= known.length * 0.6) {
+      return nameToId[known]
+    }
+  }
+  return null
+}
+
 async function saveRelations(projectId, relations, nameToId) {
   await sql`DELETE FROM character_relations WHERE project_id = ${projectId}`
 
+  let saved = 0, skipped = 0
   for (const r of relations) {
-    const fromId = nameToId[r.from_name]
-    const toId = nameToId[r.to_name]
-    if (!fromId || !toId) continue
+    const fromId = fuzzyMatchName(r.from_name, nameToId)
+    const toId = fuzzyMatchName(r.to_name, nameToId)
+    if (!fromId || !toId) {
+      console.warn(`[Relations] Skipped: "${r.from_name}" -> "${r.to_name}" (unmatched)`)
+      skipped++
+      continue
+    }
 
     await sql`INSERT INTO character_relations
       (project_id, from_character_id, to_character_id, relation_type, faction, interest_link, emotion_link, description)
       VALUES (${projectId}, ${fromId}, ${toId},
         ${r.relation_type || ''}, ${r.faction || ''},
         ${r.interest_link || ''}, ${r.emotion_link || ''}, ${r.description || ''})`
+    saved++
   }
+  console.log(`[Relations] Saved ${saved}, skipped ${skipped} for project ${projectId}`)
 }
 
 async function savePlotControl(projectId, d) {

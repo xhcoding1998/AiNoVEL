@@ -171,6 +171,16 @@ ai.get('/:id/material', async (c) => {
 
 // ---------- Background processors ----------
 
+const STEP_MAX_TOKENS = {
+  basic_info: 4096,
+  world_building: 128000,
+  characters: 128000,
+  relations: 128000,
+  plot_control: 128000,
+  volumes: 128000,
+  writing_style: 128000
+}
+
 async function processStepByStep(taskId, projectId, prompt, userConfig, startIdx) {
   for (let i = startIdx; i < GENERATION_STEPS.length; i++) {
     const step = GENERATION_STEPS[i]
@@ -186,7 +196,8 @@ async function processStepByStep(taskId, projectId, prompt, userConfig, startIdx
 
       const systemPrompt = buildStepPrompt(step, prompt, existingMaterial)
       const userPrompt = prompt || '请根据已有物料生成本部分内容'
-      const result = await callAI(userConfig, systemPrompt, userPrompt, { json_mode: true, max_tokens: 8192 })
+      const maxTokens = STEP_MAX_TOKENS[step] || 128000
+      const result = await callAI(userConfig, systemPrompt, userPrompt, { json_mode: true, max_tokens: maxTokens })
 
       await parseAndSaveSection(projectId, step, result)
       await compileMaterial(projectId)
@@ -202,7 +213,6 @@ async function processStepByStep(taskId, projectId, prompt, userConfig, startIdx
     }
   }
 
-  // All steps completed
   await sql`UPDATE ai_tasks SET status = 'completed', completed_at = NOW() WHERE id = ${taskId}`
   await sql`UPDATE projects SET generation_status = 'completed', generation_step = NULL, updated_at = NOW() WHERE id = ${projectId}`
 }
@@ -217,7 +227,8 @@ async function processSingleSection(taskId, projectId, section, prompt, userConf
 
     const systemPrompt = buildStepPrompt(section, prompt, existingMaterial)
     const userPrompt = prompt || `请重新生成该部分内容，保持与其他部分的一致性`
-    const result = await callAI(userConfig, systemPrompt, userPrompt, { json_mode: true, max_tokens: 8192 })
+    const maxTokens = STEP_MAX_TOKENS[section] || 128000
+    const result = await callAI(userConfig, systemPrompt, userPrompt, { json_mode: true, max_tokens: maxTokens })
 
     await parseAndSaveSection(projectId, section, result)
     await compileMaterial(projectId)
