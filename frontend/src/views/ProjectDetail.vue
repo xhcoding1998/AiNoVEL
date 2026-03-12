@@ -8,6 +8,7 @@ import VTabs from '../components/ui/VTabs.vue'
 import VLoading from '../components/ui/VLoading.vue'
 import VButton from '../components/ui/VButton.vue'
 import VTextarea from '../components/ui/VTextarea.vue'
+import VModal from '../components/ui/VModal.vue'
 import GenerationProgress from '../components/GenerationProgress.vue'
 
 const route = useRoute()
@@ -186,27 +187,20 @@ watch(() => route.params.id, async (id) => {
         <router-view :generation-status="genStatus" />
       </div>
 
-      <Teleport to="body">
-        <Transition name="fade">
-          <div v-if="showRegenModal" class="modal-overlay" @click.self="showRegenModal = false">
-            <Transition name="scale">
-              <div v-if="showRegenModal" class="modal-box">
-                <h3 class="modal-title">全部重新生成</h3>
-                <p class="modal-desc">输入新的创作指令，AI 将分步重新生成全部 7 大类内容，每步完成即可查看</p>
-                <VTextarea
-                  v-model="regenPrompt"
-                  placeholder="例如：调整风格为更暗黑的基调，增加一个双面间谍角色..."
-                  :rows="4"
-                />
-                <div class="modal-footer">
-                  <VButton variant="secondary" @click="showRegenModal = false">取消</VButton>
-                  <VButton variant="primary" :loading="regenerating" @click="regenerateAll">开始生成</VButton>
-                </div>
-              </div>
-            </Transition>
-          </div>
-        </Transition>
-      </Teleport>
+      <VModal v-model="showRegenModal" title="全部重新生成" width="500px">
+        <div class="regen-modal-content">
+          <p class="regen-modal-desc">输入新的创作指令，AI 将分步重新生成全部 7 大类内容，每步完成即可查看</p>
+          <VTextarea
+            v-model="regenPrompt"
+            placeholder="例如：调整风格为更暗黑的基调，增加一个双面间谍角色..."
+            :rows="4"
+          />
+        </div>
+        <template #footer>
+          <VButton variant="secondary" @click="showRegenModal = false">取消</VButton>
+          <VButton variant="primary" :loading="regenerating" @click="regenerateAll">开始生成</VButton>
+        </template>
+      </VModal>
     </template>
   </div>
 </template>
@@ -275,49 +269,15 @@ watch(() => route.params.id, async (id) => {
   padding-top: 20px;
 }
 
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-  padding: 24px;
-}
-
-.modal-box {
-  width: 100%;
-  max-width: 500px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-hover);
-  border-radius: var(--radius-xl);
-  padding: var(--space-6);
+.regen-modal-content {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  box-shadow: var(--shadow-xl);
 }
 
-.modal-title {
-  font-family: var(--font-display);
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
-.modal-desc {
+.regen-modal-desc {
   font-size: 13px;
   color: var(--text-secondary);
   line-height: 1.6;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding-top: var(--space-2);
 }
 </style>

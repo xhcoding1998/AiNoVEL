@@ -9,11 +9,16 @@ import VInput from '../ui/VInput.vue'
 import VButton from '../ui/VButton.vue'
 import VCard from '../ui/VCard.vue'
 import VAccordionItem from '../ui/VAccordionItem.vue'
+import VConfirmModal from '../ui/VConfirmModal.vue'
 
 const route = useRoute()
 const store = useNovelStore()
 const toast = useToast()
-const { showRegenInput, regenPrompt, regenerating, regenerateSection } = useAIRegenerate()
+const {
+  showRegenInput, regenPrompt, regenerating,
+  showConfirmModal, affectedSteps,
+  requestRegenerate, confirmRegenerate, cancelRegenerate
+} = useAIRegenerate()
 const dataVersion = inject('dataVersion', ref(0))
 watch(dataVersion, () => loadData())
 
@@ -42,8 +47,8 @@ async function save() {
   finally { saving.value = false }
 }
 
-async function handleRegen() {
-  await regenerateSection(pid, 'world_building', loadData)
+function handleRegenClick() {
+  requestRegenerate(pid, 'world_building', loadData)
 }
 </script>
 
@@ -65,7 +70,7 @@ async function handleRegen() {
 
     <div v-if="showRegenInput" class="regen-bar">
       <VInput v-model="regenPrompt" placeholder="补充指令（可选），如：改为未来科幻世界..." />
-      <VButton variant="primary" size="sm" :loading="regenerating" @click="handleRegen">生成</VButton>
+      <VButton variant="primary" size="sm" :loading="regenerating" @click="handleRegenClick">生成</VButton>
     </div>
 
     <div class="accordion-list">
@@ -86,6 +91,18 @@ async function handleRegen() {
       <VButton variant="primary" :loading="saving" @click="save">保存</VButton>
     </template>
   </VCard>
+
+  <VConfirmModal
+    v-model="showConfirmModal"
+    title="确认重新生成世界观"
+    confirm-text="确认重新生成"
+    :affected-steps="affectedSteps"
+    :loading="regenerating"
+    @confirm="confirmRegenerate"
+    @cancel="cancelRegenerate"
+  >
+    <p>重新生成「世界观与背景」将覆盖当前的世界观设定。由于内容链路的依赖关系，此阶段之后的角色、关系、剧情等内容都可能需要重新生成以保持一致性。</p>
+  </VConfirmModal>
 </template>
 
 <style scoped>

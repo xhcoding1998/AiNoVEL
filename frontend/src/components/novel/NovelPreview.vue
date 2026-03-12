@@ -341,7 +341,7 @@ const formattedContent = computed(() => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  max-width: 680px;
+  max-width: 780px;
   margin: 0 auto;
   padding: 40px 24px 60px;
   width: 100%;

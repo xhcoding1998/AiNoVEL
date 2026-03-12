@@ -9,11 +9,16 @@ import VInput from '../ui/VInput.vue'
 import VButton from '../ui/VButton.vue'
 import VCard from '../ui/VCard.vue'
 import VAccordionItem from '../ui/VAccordionItem.vue'
+import VConfirmModal from '../ui/VConfirmModal.vue'
 
 const route = useRoute()
 const store = useNovelStore()
 const toast = useToast()
-const { showRegenInput, regenPrompt, regenerating, regenerateSection } = useAIRegenerate()
+const {
+  showRegenInput, regenPrompt, regenerating,
+  showConfirmModal, affectedSteps,
+  requestRegenerate, confirmRegenerate, cancelRegenerate
+} = useAIRegenerate()
 const pid = route.params.id
 const dataVersion = inject('dataVersion', ref(0))
 watch(dataVersion, () => loadData())
@@ -40,8 +45,8 @@ async function save() {
   finally { saving.value = false }
 }
 
-async function handleRegen() {
-  await regenerateSection(pid, 'writing_style', loadData)
+function handleRegenClick() {
+  requestRegenerate(pid, 'writing_style', loadData)
 }
 </script>
 
@@ -63,7 +68,7 @@ async function handleRegen() {
 
     <div v-if="showRegenInput" class="regen-bar">
       <VInput v-model="regenPrompt" placeholder="补充指令（可选），如：改为更诙谐幽默的风格..." />
-      <VButton variant="primary" size="sm" :loading="regenerating" @click="handleRegen">生成</VButton>
+      <VButton variant="primary" size="sm" :loading="regenerating" @click="handleRegenClick">生成</VButton>
     </div>
 
     <div class="accordion-list">
@@ -87,6 +92,18 @@ async function handleRegen() {
       <VButton variant="primary" :loading="saving" @click="save">保存</VButton>
     </template>
   </VCard>
+
+  <VConfirmModal
+    v-model="showConfirmModal"
+    title="确认重新生成风格控制"
+    confirm-text="确认重新生成"
+    :affected-steps="affectedSteps"
+    :loading="regenerating"
+    @confirm="confirmRegenerate"
+    @cancel="cancelRegenerate"
+  >
+    <p>重新生成「风格控制」将覆盖当前的文风、节奏等设定。作为创作链路的最后一环，重新生成此内容不会影响之前的物料。</p>
+  </VConfirmModal>
 </template>
 
 <style scoped>

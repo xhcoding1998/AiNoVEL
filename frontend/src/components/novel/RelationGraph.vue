@@ -5,6 +5,7 @@ import { useNovelStore } from '../../stores/novel'
 import { useToast } from '../../composables/useToast'
 import { useAIRegenerate } from '../../composables/useAIRegenerate'
 import { useGraph } from '../../composables/useGraph'
+import { aiApi } from '../../api/ai'
 import VButton from '../ui/VButton.vue'
 import VCard from '../ui/VCard.vue'
 import VModal from '../ui/VModal.vue'
@@ -12,11 +13,16 @@ import VInput from '../ui/VInput.vue'
 import VSelect from '../ui/VSelect.vue'
 import VTextarea from '../ui/VTextarea.vue'
 import VBadge from '../ui/VBadge.vue'
+import VConfirmModal from '../ui/VConfirmModal.vue'
 
 const route = useRoute()
 const store = useNovelStore()
 const toast = useToast()
-const { showRegenInput, regenPrompt, regenerating, regenerateSection } = useAIRegenerate()
+const {
+  showRegenInput, regenPrompt, regenerating,
+  showConfirmModal, affectedSteps,
+  requestRegenerate, confirmRegenerate, cancelRegenerate
+} = useAIRegenerate()
 const pid = route.params.id
 const dataVersion = inject('dataVersion', ref(0))
 watch(dataVersion, () => loadData())
@@ -28,6 +34,7 @@ const { graphData, layout, viewBox } = useGraph(
 
 const showAddRelation = ref(false)
 const saving = ref(false)
+const aiGenerating = ref(false)
 const expandedRelation = ref(null)
 const relationForm = ref({
   id: null, from_character_id: null, to_character_id: null,
@@ -70,8 +77,43 @@ async function deleteRelation(id) {
   catch { toast.error('删除失败') }
 }
 
-async function handleRegen() {
-  await regenerateSection(pid, 'relations', loadData)
+function handleRegenClick() {
+  requestRegenerate(pid, 'relations', loadData)
+}
+
+async function aiGenerateRelation() {
+  aiGenerating.value = true
+  try {
+    const fromName = charName(relationForm.value.from_character_id)
+    const toName = charName(relationForm.value.to_character_id)
+    let hint = '请为项目中的角色生成一条新关系'
+    if (fromName !== '?' && toName !== '?') {
+      hint = `请为「${fromName}」和「${toName}」生成关系`
+    } else if (fromName !== '?') {
+      hint = `请为「${fromName}」和另一个角色生成关系`
+    }
+    const res = await aiApi.generateSingleItem(pid, 'relation', hint)
+    const data = res.data || res
+
+    if (data.from_name) {
+      const fromChar = store.characters.find(c => c.name === data.from_name)
+      if (fromChar) relationForm.value.from_character_id = fromChar.id
+    }
+    if (data.to_name) {
+      const toChar = store.characters.find(c => c.name === data.to_name)
+      if (toChar) relationForm.value.to_character_id = toChar.id
+    }
+    relationForm.value.relation_type = data.relation_type || ''
+    relationForm.value.faction = data.faction || ''
+    relationForm.value.interest_link = data.interest_link || ''
+    relationForm.value.emotion_link = data.emotion_link || ''
+    relationForm.value.description = data.description || ''
+    toast.success('AI 已生成关系内容，请检查后保存')
+  } catch (err) {
+    toast.error(err?.error || 'AI 生成失败')
+  } finally {
+    aiGenerating.value = false
+  }
 }
 
 function edgePath(points) {
@@ -107,7 +149,7 @@ const roleColorMap = { male_lead: '#0070f3', female_lead: '#8b5cf6', supporting:
 
     <div v-if="showRegenInput" class="regen-bar">
       <VInput v-model="regenPrompt" placeholder="补充指令（可选），如：增加更复杂的利益纠葛..." />
-      <VButton variant="primary" size="sm" :loading="regenerating" @click="handleRegen">生成</VButton>
+      <VButton variant="primary" size="sm" :loading="regenerating" @click="handleRegenClick">生成</VButton>
     </div>
 
     <VCard v-if="graphData.nodes.length" padding="sm" class="graph-card">
@@ -220,10 +262,32 @@ const roleColorMap = { male_lead: '#0070f3', female_lead: '#8b5cf6', supporting:
         <VTextarea v-model="relationForm.description" label="关系描述" placeholder="补充描述..." :rows="2" />
       </div>
       <template #footer>
-        <VButton variant="secondary" @click="showAddRelation = false">取消</VButton>
-        <VButton variant="primary" :loading="saving" @click="saveRelation">保存</VButton>
+        <div class="modal-footer-full">
+          <VButton variant="ghost" size="sm" :loading="aiGenerating" @click="aiGenerateRelation" class="ai-fill-btn">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0">
+              <path d="M7 1v3M7 10v3M1 7h3M10 7h3M2.8 2.8l2.1 2.1M9.1 9.1l2.1 2.1M11.2 2.8l-2.1 2.1M4.9 9.1l-2.1 2.1" stroke-linecap="round"/>
+            </svg>
+            AI 智能填充
+          </VButton>
+          <div class="modal-footer-right">
+            <VButton variant="secondary" @click="showAddRelation = false">取消</VButton>
+            <VButton variant="primary" :loading="saving" @click="saveRelation">保存</VButton>
+          </div>
+        </div>
       </template>
     </VModal>
+
+    <VConfirmModal
+      v-model="showConfirmModal"
+      title="确认重新生成人物关系"
+      confirm-text="确认重新生成"
+      :affected-steps="affectedSteps"
+      :loading="regenerating"
+      @confirm="confirmRegenerate"
+      @cancel="cancelRegenerate"
+    >
+      <p>重新生成「人物关系」将覆盖当前所有关系数据，且由于内容链路的依赖关系，此阶段之后的所有内容也可能需要重新生成以保持一致性。</p>
+    </VConfirmModal>
   </div>
 </template>
 
@@ -408,4 +472,25 @@ const roleColorMap = { male_lead: '#0070f3', female_lead: '#8b5cf6', supporting:
 }
 
 .form-grid { display: flex; flex-direction: column; gap: 16px; }
+
+.modal-footer-full {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.modal-footer-right {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.ai-fill-btn {
+  color: var(--accent-blue, #0070f3);
+}
+
+.ai-fill-btn:hover:not(:disabled) {
+  background: var(--accent-blue-subtle, rgba(0, 112, 243, 0.08));
+  color: var(--accent-blue, #0070f3);
+}
 </style>

@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { useNovelStore } from '../../stores/novel'
 import { useToast } from '../../composables/useToast'
 import { useAIRegenerate } from '../../composables/useAIRegenerate'
+import { aiApi } from '../../api/ai'
 import VTextarea from '../ui/VTextarea.vue'
 import VButton from '../ui/VButton.vue'
 import VCard from '../ui/VCard.vue'
@@ -13,6 +14,7 @@ import VSelect from '../ui/VSelect.vue'
 import VModal from '../ui/VModal.vue'
 import VBadge from '../ui/VBadge.vue'
 import VAccordionItem from '../ui/VAccordionItem.vue'
+import VConfirmModal from '../ui/VConfirmModal.vue'
 
 const route = useRoute()
 const store = useNovelStore()
@@ -26,6 +28,7 @@ const regenVol = useAIRegenerate()
 
 const activeTab = ref('storyline')
 const saving = ref(false)
+const aiGenerating = ref(false)
 
 const plotForm = ref({ main_storyline: '', outline_summary: '' })
 const openPlotSections = ref({ main_storyline: false, outline_summary: false })
@@ -86,6 +89,32 @@ function openAddDevice() {
   showDeviceModal.value = true
 }
 
+function handlePlotRegenClick() {
+  regenPlot.requestRegenerate(pid, 'plot_control', loadPlot)
+}
+
+function handleVolRegenClick() {
+  regenVol.requestRegenerate(pid, 'volumes', loadVolumes)
+}
+
+async function aiGenerateVolume() {
+  aiGenerating.value = true
+  try {
+    const hint = `请生成第${volumeForm.value.volume_number}卷的大纲`
+    const res = await aiApi.generateSingleItem(pid, 'volume', hint)
+    const data = res.data || res
+    volumeForm.value.volume_number = data.volume_number || volumeForm.value.volume_number
+    volumeForm.value.title = data.title || ''
+    volumeForm.value.goal = data.goal || ''
+    volumeForm.value.summary = data.summary || ''
+    toast.success('AI 已生成卷大纲，请检查后保存')
+  } catch (err) {
+    toast.error(err?.error || 'AI 生成失败')
+  } finally {
+    aiGenerating.value = false
+  }
+}
+
 const tabs = [{ label: '故事主线', value: 'storyline' }, { label: '分卷大纲', value: 'volumes' }, { label: '伏笔/反转', value: 'devices' }]
 </script>
 
@@ -110,7 +139,7 @@ const tabs = [{ label: '故事主线', value: 'storyline' }, { label: '分卷大
           </template>
           <div v-if="regenPlot.showRegenInput.value" class="regen-bar">
             <VInput v-model="regenPlot.regenPrompt.value" placeholder="补充指令（可选）..." />
-            <VButton variant="primary" size="sm" :loading="regenPlot.regenerating.value" @click="regenPlot.regenerateSection(pid, 'plot_control', loadPlot)">生成</VButton>
+            <VButton variant="primary" size="sm" :loading="regenPlot.regenerating.value" @click="handlePlotRegenClick">生成</VButton>
           </div>
           <div class="accordion-list">
             <VAccordionItem title="故事主线" :open="openPlotSections.main_storyline" @toggle="openPlotSections.main_storyline = !openPlotSections.main_storyline">
@@ -138,7 +167,7 @@ const tabs = [{ label: '故事主线', value: 'storyline' }, { label: '分卷大
         </div>
         <div v-if="regenVol.showRegenInput.value" class="regen-bar">
           <VInput v-model="regenVol.regenPrompt.value" placeholder="补充指令（可选）..." />
-          <VButton variant="primary" size="sm" :loading="regenVol.regenerating.value" @click="regenVol.regenerateSection(pid, 'volumes', loadVolumes)">生成</VButton>
+          <VButton variant="primary" size="sm" :loading="regenVol.regenerating.value" @click="handleVolRegenClick">生成</VButton>
         </div>
         <div class="vol-list">
           <VCard v-for="vol in store.volumes" :key="vol.id" padding="sm">
@@ -183,8 +212,18 @@ const tabs = [{ label: '故事主线', value: 'storyline' }, { label: '分卷大
         <VTextarea v-model="volumeForm.summary" label="内容概要" :rows="3" />
       </div>
       <template #footer>
-        <VButton variant="secondary" @click="showVolumeModal = false">取消</VButton>
-        <VButton variant="primary" :loading="saving" @click="saveVolume">保存</VButton>
+        <div class="modal-footer-full">
+          <VButton variant="ghost" size="sm" :loading="aiGenerating" @click="aiGenerateVolume" class="ai-fill-btn">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0">
+              <path d="M7 1v3M7 10v3M1 7h3M10 7h3M2.8 2.8l2.1 2.1M9.1 9.1l2.1 2.1M11.2 2.8l-2.1 2.1M4.9 9.1l-2.1 2.1" stroke-linecap="round"/>
+            </svg>
+            AI 智能填充
+          </VButton>
+          <div class="modal-footer-right">
+            <VButton variant="secondary" @click="showVolumeModal = false">取消</VButton>
+            <VButton variant="primary" :loading="saving" @click="saveVolume">保存</VButton>
+          </div>
+        </div>
       </template>
     </VModal>
 
@@ -203,6 +242,30 @@ const tabs = [{ label: '故事主线', value: 'storyline' }, { label: '分卷大
         <VButton variant="primary" :loading="saving" @click="saveDevice">保存</VButton>
       </template>
     </VModal>
+
+    <VConfirmModal
+      v-model="regenPlot.showConfirmModal.value"
+      title="确认重新生成剧情总控"
+      confirm-text="确认重新生成"
+      :affected-steps="regenPlot.affectedSteps.value"
+      :loading="regenPlot.regenerating.value"
+      @confirm="regenPlot.confirmRegenerate()"
+      @cancel="regenPlot.cancelRegenerate()"
+    >
+      <p>重新生成「剧情总控」将覆盖当前剧情数据，且由于内容链路的依赖关系，此阶段之后的所有内容也可能需要重新生成以保持一致性。</p>
+    </VConfirmModal>
+
+    <VConfirmModal
+      v-model="regenVol.showConfirmModal.value"
+      title="确认重新生成分卷大纲"
+      confirm-text="确认重新生成"
+      :affected-steps="regenVol.affectedSteps.value"
+      :loading="regenVol.regenerating.value"
+      @confirm="regenVol.confirmRegenerate()"
+      @cancel="regenVol.cancelRegenerate()"
+    >
+      <p>重新生成「分卷大纲」将覆盖当前所有分卷数据及其下的章节内容，且由于内容链路的依赖关系，此阶段之后的所有内容也可能需要重新生成以保持一致性。</p>
+    </VConfirmModal>
   </div>
 </template>
 
@@ -290,4 +353,25 @@ const tabs = [{ label: '故事主线', value: 'storyline' }, { label: '分卷大
 .device-item__head { display: flex; gap: var(--space-2); margin-bottom: var(--space-2); }
 .device-item__desc { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
 .empty-text { color: var(--text-tertiary); text-align: center; padding: var(--space-10); font-size: 14px; }
+
+.modal-footer-full {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.modal-footer-right {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.ai-fill-btn {
+  color: var(--accent-blue, #0070f3);
+}
+
+.ai-fill-btn:hover:not(:disabled) {
+  background: var(--accent-blue-subtle, rgba(0, 112, 243, 0.08));
+  color: var(--accent-blue, #0070f3);
+}
 </style>

@@ -134,6 +134,36 @@ ai.post('/:id/generate-section', async (c) => {
   return c.json({ data: task })
 })
 
+// AI-generate a single item (character, relation, volume) based on existing material
+ai.post('/:id/generate-single-item', async (c) => {
+  const pid = await verifyProjectOwner(c)
+  if (!pid) return c.json({ error: '项目不存在' }, 404)
+
+  const { item_type, context } = await c.req.json()
+  const validTypes = ['character', 'relation', 'volume']
+  if (!validTypes.includes(item_type)) {
+    return c.json({ error: '无效的生成类型' }, 400)
+  }
+
+  const userId = c.get('userId')
+  const userConfig = await getUserAIConfig(userId)
+
+  let existingMaterial = {}
+  try {
+    const [latest] = await sql`SELECT content FROM materials WHERE project_id = ${pid} ORDER BY version DESC LIMIT 1`
+    if (latest) existingMaterial = latest.content
+  } catch { /* ignore */ }
+
+  const prompt = buildSingleItemPrompt(item_type, existingMaterial, context)
+  try {
+    const result = await callAI(userConfig, prompt, context || '请生成一条新内容', { json_mode: true, max_tokens: 4096 })
+    const parsed = JSON.parse(result.trim().replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, ''))
+    return c.json({ data: parsed })
+  } catch (err) {
+    return c.json({ error: err.message || 'AI 生成失败' }, 500)
+  }
+})
+
 // Get all AI tasks
 ai.get('/:id/ai-tasks', async (c) => {
   const pid = await verifyProjectOwner(c)
@@ -370,6 +400,84 @@ async function processChapterContent(taskId, projectId, chapter, volume, userCon
     console.error('Chapter content generation failed:', err)
     await sql`UPDATE ai_tasks SET status = 'failed', result = ${err.message || '未知错误'}, completed_at = NOW() WHERE id = ${taskId}`
   }
+}
+
+function buildSingleItemPrompt(itemType, existingMaterial, userContext) {
+  const ctx = existingMaterial && Object.keys(existingMaterial).length
+    ? `\n\n【当前已有物料（请保持一致性）】\n${JSON.stringify(existingMaterial, null, 2)}`
+    : ''
+
+  const JSON_RULE = '你必须返回严格的 JSON 格式。不要包含任何额外文字、markdown 标记、代码块标记。直接返回 JSON 对象。'
+
+  if (itemType === 'character') {
+    return `你是一位角色塑造专家。请基于已有物料和用户要求，设计一个新的角色。
+
+${JSON_RULE}
+
+JSON 结构：
+{
+  "name": "角色全名",
+  "role_type": "male_lead / female_lead / supporting / antagonist",
+  "description": "角色详述（150字以上，包括外貌、性格、出身、技能）",
+  "core_desire": "核心欲望（50字以上）",
+  "weakness": "致命弱点（50字以上）",
+  "secret": "核心秘密（50字以上）"
+}
+
+要求：
+1. 与已有角色形成互补或对立，不要重复已有角色类型
+2. 角色要有独特的辨识度
+3. 秘密和弱点要能融入已有剧情体系${ctx}`
+  }
+
+  if (itemType === 'relation') {
+    const charNames = existingMaterial?.characters?.map(c => c.name) || []
+    const charHint = charNames.length
+      ? `\n\n【当前角色列表】：${charNames.join('、')}\n⚠️ from_name 和 to_name 必须严格使用以上角色名。`
+      : ''
+
+    return `你是一位人物关系架构师。请基于已有角色和物料，生成一条新的人物关系。
+
+${JSON_RULE}
+
+JSON 结构：
+{
+  "from_name": "角色A名字",
+  "to_name": "角色B名字",
+  "relation_type": "同盟/敌对/恋人/暗恋/虐恋/亲属/上下级/师徒/挚友/竞争/利用/监视/宿命/对照",
+  "faction": "阵营",
+  "interest_link": "利益链（50字左右）",
+  "emotion_link": "情感链（50字左右）",
+  "description": "关系动态（50字左右）"
+}
+
+要求：
+1. 优先为缺少关系的角色建立联系
+2. 关系要有灰色地带，不要太简单直白
+3. from_name 和 to_name 必须与角色列表中的名字完全一致${charHint}${ctx}`
+  }
+
+  if (itemType === 'volume') {
+    const volCount = existingMaterial?.volumes?.length || 0
+    return `你是一位分卷策划师。请基于已有物料，生成一个新的卷大纲。
+
+${JSON_RULE}
+
+JSON 结构：
+{
+  "volume_number": ${volCount + 1},
+  "title": "卷标题（格式：第X卷：主标题）",
+  "goal": "本卷核心目标（150字以上）",
+  "summary": "详细内容概要（300字以上）"
+}
+
+要求：
+1. 与前面的卷情节衔接，冲突层层升级
+2. 有明确的起承转合
+3. 结尾有钩子引导读者继续${ctx}`
+  }
+
+  return ''
 }
 
 export default ai

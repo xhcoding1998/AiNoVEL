@@ -35,11 +35,11 @@ export async function callAI(userConfig, systemPrompt, userPrompt, options = {})
 }
 
 async function tryResponsesAPI(baseUrl, apiKey, model, systemPrompt, userPrompt, options) {
-  const url = baseUrl.endsWith('/responses') ? baseUrl : `${baseUrl}/responses`
+  const url = baseUrl.endsWith('/chat/completions') ? baseUrl : `${baseUrl}/chat/completions`
 
   const body = {
     model,
-    input: [
+    messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt }
     ]

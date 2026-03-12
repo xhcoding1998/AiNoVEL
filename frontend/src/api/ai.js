@@ -11,5 +11,6 @@ export const aiApi = {
   getMaterial: (pid) => client.get(`/projects/${pid}/material`),
   generateVolumeChapters: (pid, volumeId, prompt) => client.post(`/projects/${pid}/generate-volume-chapters`, { volume_id: volumeId, prompt }),
   generateChapterContent: (pid, chapterId) => client.post(`/projects/${pid}/generate-chapter-content`, { chapter_id: chapterId }),
-  getPreview: (pid) => client.get(`/projects/${pid}/preview`)
+  getPreview: (pid) => client.get(`/projects/${pid}/preview`),
+  generateSingleItem: (pid, itemType, context) => client.post(`/projects/${pid}/generate-single-item`, { item_type: itemType, context })
 }
