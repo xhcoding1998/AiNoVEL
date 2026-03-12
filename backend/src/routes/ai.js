@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import sql from '../db/index.js'
-import { authMiddleware, verifyToken } from '../middleware/auth.js'
+import { authMiddleware } from '../middleware/auth.js'
 import { compileMaterial } from '../services/material.js'
 import { callAI, buildStepPrompt, buildChapterOutlinesPrompt, buildChapterContentPrompt, GENERATION_STEPS, STEP_LABELS } from '../services/ai.js'
 import { parseAndSaveSection } from '../services/parser.js'
@@ -489,21 +489,7 @@ ai.get('/:id/generation-logs', async (c) => {
 })
 
 ai.get('/:id/generation-logs/stream', async (c) => {
-  // SSE: EventSource can't send headers, accept token from query
-  let pid
-  const queryToken = c.req.query('token')
-  if (queryToken) {
-    try {
-      const payload = verifyToken(queryToken)
-      const projectId = c.req.param('id')
-      const [p] = await sql`SELECT id FROM projects WHERE id = ${projectId} AND user_id = ${payload.id}`
-      pid = p ? projectId : null
-    } catch {
-      return c.json({ error: '认证失败' }, 401)
-    }
-  } else {
-    pid = await verifyProjectOwner(c)
-  }
+  const pid = await verifyProjectOwner(c)
   if (!pid) return c.json({ error: '项目不存在' }, 404)
 
   let lastId = parseInt(c.req.query('after_id')) || 0

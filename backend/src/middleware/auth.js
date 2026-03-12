@@ -12,11 +12,19 @@ export function verifyToken(token) {
 
 export async function authMiddleware(c, next) {
   const header = c.req.header('Authorization')
-  if (!header || !header.startsWith('Bearer ')) {
+  let token = null
+
+  if (header && header.startsWith('Bearer ')) {
+    token = header.slice(7)
+  } else {
+    token = c.req.query('token') || null
+  }
+
+  if (!token) {
     return c.json({ error: '未登录' }, 401)
   }
+
   try {
-    const token = header.slice(7)
     const payload = verifyToken(token)
     c.set('userId', payload.id)
     c.set('user', payload)
