@@ -8,6 +8,7 @@ import VTextarea from '../ui/VTextarea.vue'
 import VInput from '../ui/VInput.vue'
 import VButton from '../ui/VButton.vue'
 import VCard from '../ui/VCard.vue'
+import VAccordionItem from '../ui/VAccordionItem.vue'
 
 const route = useRoute()
 const store = useNovelStore()
@@ -19,6 +20,7 @@ watch(dataVersion, () => loadData())
 const form = ref({ era_setting: '', power_structure: '', rules: '', social_atmosphere: '' })
 const saving = ref(false)
 const pid = route.params.id
+const openSections = ref({ era_setting: false, power_structure: false, rules: false, social_atmosphere: false })
 
 async function loadData() {
   await store.fetchWorldBuilding(pid)
@@ -66,11 +68,19 @@ async function handleRegen() {
       <VButton variant="primary" size="sm" :loading="regenerating" @click="handleRegen">生成</VButton>
     </div>
 
-    <div class="form-grid">
-      <VTextarea v-model="form.era_setting" label="时代/城市/行业背景" placeholder="故事发生的时代、地点、行业环境等" :rows="3" />
-      <VTextarea v-model="form.power_structure" label="势力结构" placeholder="世界中有哪些主要势力？他们之间的关系如何？" :rows="3" />
-      <VTextarea v-model="form.rules" label="规则设定" placeholder="这个世界有哪些特殊规则？修炼体系/科技体系/社会规则等" :rows="3" />
-      <VTextarea v-model="form.social_atmosphere" label="社会氛围" placeholder="整体社会风气、民众生活状态等" :rows="3" />
+    <div class="accordion-list">
+      <VAccordionItem title="时代/城市/行业背景" :open="openSections.era_setting" @toggle="openSections.era_setting = !openSections.era_setting">
+        <VTextarea v-model="form.era_setting" placeholder="故事发生的时代、地点、行业环境等" :rows="3" />
+      </VAccordionItem>
+      <VAccordionItem title="势力结构" :open="openSections.power_structure" @toggle="openSections.power_structure = !openSections.power_structure">
+        <VTextarea v-model="form.power_structure" placeholder="世界中有哪些主要势力？他们之间的关系如何？" :rows="3" />
+      </VAccordionItem>
+      <VAccordionItem title="规则设定" :open="openSections.rules" @toggle="openSections.rules = !openSections.rules">
+        <VTextarea v-model="form.rules" placeholder="这个世界有哪些特殊规则？修炼体系/科技体系/社会规则等" :rows="3" />
+      </VAccordionItem>
+      <VAccordionItem title="社会氛围" :open="openSections.social_atmosphere" @toggle="openSections.social_atmosphere = !openSections.social_atmosphere">
+        <VTextarea v-model="form.social_atmosphere" placeholder="整体社会风气、民众生活状态等" :rows="3" />
+      </VAccordionItem>
     </div>
     <template #footer>
       <VButton variant="primary" :loading="saving" @click="save">保存</VButton>
@@ -106,9 +116,9 @@ async function handleRegen() {
 
 .regen-bar .v-input { flex: 1; }
 
-.form-grid {
+.accordion-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-2);
 }
 </style>

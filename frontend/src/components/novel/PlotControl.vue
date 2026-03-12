@@ -12,6 +12,7 @@ import VInput from '../ui/VInput.vue'
 import VSelect from '../ui/VSelect.vue'
 import VModal from '../ui/VModal.vue'
 import VBadge from '../ui/VBadge.vue'
+import VAccordionItem from '../ui/VAccordionItem.vue'
 
 const route = useRoute()
 const store = useNovelStore()
@@ -27,6 +28,7 @@ const activeTab = ref('storyline')
 const saving = ref(false)
 
 const plotForm = ref({ main_storyline: '', outline_summary: '' })
+const openPlotSections = ref({ main_storyline: false, outline_summary: false })
 const showVolumeModal = ref(false)
 const volumeForm = ref({ id: null, volume_number: 1, title: '', goal: '', summary: '' })
 const showDeviceModal = ref(false)
@@ -110,9 +112,13 @@ const tabs = [{ label: '故事主线', value: 'storyline' }, { label: '分卷大
             <VInput v-model="regenPlot.regenPrompt.value" placeholder="补充指令（可选）..." />
             <VButton variant="primary" size="sm" :loading="regenPlot.regenerating.value" @click="regenPlot.regenerateSection(pid, 'plot_control', loadPlot)">生成</VButton>
           </div>
-          <div class="form-grid">
-            <VTextarea v-model="plotForm.main_storyline" label="故事主线" placeholder="描述整个故事的主线走向" :rows="5" />
-            <VTextarea v-model="plotForm.outline_summary" label="大纲摘要" placeholder="整体大纲的简要概述" :rows="5" />
+          <div class="accordion-list">
+            <VAccordionItem title="故事主线" :open="openPlotSections.main_storyline" @toggle="openPlotSections.main_storyline = !openPlotSections.main_storyline">
+              <VTextarea v-model="plotForm.main_storyline" placeholder="描述整个故事的主线走向" :rows="5" />
+            </VAccordionItem>
+            <VAccordionItem title="大纲摘要" :open="openPlotSections.outline_summary" @toggle="openPlotSections.outline_summary = !openPlotSections.outline_summary">
+              <VTextarea v-model="plotForm.outline_summary" placeholder="整体大纲的简要概述" :rows="5" />
+            </VAccordionItem>
           </div>
           <template #footer>
             <VButton variant="primary" :loading="saving" @click="savePlot">保存</VButton>
@@ -245,6 +251,12 @@ const tabs = [{ label: '故事主线', value: 'storyline' }, { label: '分卷大
 }
 
 .regen-bar .v-input { flex: 1; }
+
+.accordion-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
 
 .form-grid { display: flex; flex-direction: column; gap: var(--space-4); }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }

@@ -179,7 +179,7 @@ async function save() {
   font-weight: 500;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-default);
-  background: var(--bg-tertiary);
+  background: var(--bg-nested);
   color: var(--text-secondary);
   cursor: pointer;
   transition: all var(--transition-fast);

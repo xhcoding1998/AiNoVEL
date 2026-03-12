@@ -24,6 +24,7 @@ watch(dataVersion, () => loadData())
 const showEditor = ref(false)
 const saving = ref(false)
 const selectedVolume = ref(null)
+const volDetailOpen = ref(false)
 const generatingChapters = ref(false)
 const generatingChaptersTaskId = ref(null)
 const generatingContentMap = ref({})
@@ -315,14 +316,20 @@ const totalWords = computed(() => {
         </button>
       </div>
 
-      <VCard v-if="currentVolume" class="vol-detail">
-        <div class="vol-detail__head">
-          <h4 class="vol-detail__title">{{ currentVolume.title }}</h4>
+      <VCard v-if="currentVolume" class="vol-detail vol-detail--collapsible">
+        <div class="vol-detail__head" @click="volDetailOpen = !volDetailOpen">
+          <div class="vol-detail__head-left">
+            <svg class="vol-detail__chevron" :class="{ 'vol-detail__chevron--open': volDetailOpen }" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 6l4 4 4-4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <h4 class="vol-detail__title">{{ currentVolume.title }}</h4>
+            <span class="vol-detail__summary-label">{{ volDetailOpen ? '收起' : '展开' }}本卷描述</span>
+          </div>
           <VButton
             variant="primary"
             size="sm"
             :loading="generatingChapters"
-            @click="generateChaptersForVolume"
+            @click.stop="generateChaptersForVolume"
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M7 2l1 2.5 2.5.5-2 2 .5 2.5L7 8.5 4.5 9.5l.5-2.5-2-2L5.5 4.5z" stroke-linejoin="round"/>
@@ -330,14 +337,18 @@ const totalWords = computed(() => {
             AI 生成本卷章节
           </VButton>
         </div>
-        <div v-if="currentVolume.goal" class="vol-detail__section">
-          <label class="vol-detail__label">本卷目标</label>
-          <p class="vol-detail__text">{{ currentVolume.goal }}</p>
-        </div>
-        <div v-if="currentVolume.summary" class="vol-detail__section">
-          <label class="vol-detail__label">内容概要</label>
-          <p class="vol-detail__text vol-detail__text--summary">{{ currentVolume.summary }}</p>
-        </div>
+        <Transition name="vol-detail-fold">
+          <div v-show="volDetailOpen" class="vol-detail__body">
+            <div v-if="currentVolume.goal" class="vol-detail__section vol-detail__section--block">
+              <label class="vol-detail__label">本卷目标</label>
+              <p class="vol-detail__text">{{ currentVolume.goal }}</p>
+            </div>
+            <div v-if="currentVolume.summary" class="vol-detail__section vol-detail__section--block">
+              <label class="vol-detail__label">内容概要</label>
+              <p class="vol-detail__text vol-detail__text--summary">{{ currentVolume.summary }}</p>
+            </div>
+          </div>
+        </Transition>
       </VCard>
 
       <div v-if="store.chapters.length" class="chapter-list">
@@ -346,8 +357,8 @@ const totalWords = computed(() => {
           <span class="chapter-list__words">{{ totalWords.toLocaleString() }} 字</span>
         </div>
         <VCard v-for="ch in store.chapters" :key="ch.id" padding="sm" hoverable>
-          <div class="chapter-item" :class="{ 'chapter-item--generating': isChapterGenerating(ch.id) }">
-            <div class="chapter-item__head" @click="openEdit(ch)">
+          <div class="chapter-item" :class="{ 'chapter-item--generating': isChapterGenerating(ch.id) }" @click="openEdit(ch)">
+            <div class="chapter-item__head">
               <span class="chapter-item__num">第{{ ch.chapter_number }}章</span>
               <span class="chapter-item__title">{{ ch.title || '无标题' }}</span>
               <VBadge v-if="isChapterGenerating(ch.id)" variant="warning">
@@ -383,7 +394,7 @@ const totalWords = computed(() => {
                 >
                   生成中...
                 </VButton>
-                <button v-if="!isChapterGenerating(ch.id)" class="chapter-item__edit" @click="openEdit(ch)">
+                <button v-if="!isChapterGenerating(ch.id)" class="chapter-item__edit" @click.stop="openEdit(ch)">
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3">
                     <path d="M8.5 2.5l3 3M2 9l6-6 3 3-6 6H2V9z" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
@@ -403,7 +414,7 @@ const totalWords = computed(() => {
           <VInput v-model="chapterForm.title" label="章节标题" placeholder="章节标题" />
         </div>
         <VSelect v-model="chapterForm.status" label="状态" :options="statusOptions" />
-        <VTextarea v-model="chapterForm.content" label="章节内容" placeholder="在此编写章节内容..." :rows="16" :maxHeight="600" />
+        <VTextarea v-model="chapterForm.content" label="章节内容" placeholder="在此编写章节内容..." :rows="12" :maxHeight="420" noResize />
       </div>
       <template #footer>
         <VButton variant="secondary" @click="showEditor = false">取消</VButton>
@@ -482,7 +493,7 @@ const totalWords = computed(() => {
   align-items: flex-start;
   padding: 10px 16px;
   border-radius: var(--radius-md);
-  background: var(--bg-tertiary);
+  background: var(--bg-nested);
   border: 1px solid var(--border-default);
   transition: all var(--transition-fast);
   cursor: pointer;
@@ -521,6 +532,16 @@ const totalWords = computed(() => {
   margin-bottom: 24px;
 }
 
+.vol-detail--collapsible .vol-detail__head {
+  cursor: pointer;
+  margin-bottom: 0;
+  user-select: none;
+}
+
+.vol-detail--collapsible .vol-detail__head:hover .vol-detail__chevron {
+  color: var(--text-primary);
+}
+
 .vol-detail__head {
   display: flex;
   align-items: center;
@@ -529,15 +550,71 @@ const totalWords = computed(() => {
   margin-bottom: 16px;
 }
 
+.vol-detail__head-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.vol-detail__chevron {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  transition: transform var(--transition-fast), color var(--transition-fast);
+}
+
+.vol-detail__chevron--open {
+  transform: rotate(180deg);
+  color: var(--text-secondary);
+}
+
 .vol-detail__title {
   font-size: 15px;
   font-weight: 600;
   line-height: 1.4;
   letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vol-detail__summary-label {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.vol-detail__body {
+  padding-top: 14px;
+}
+
+.vol-detail-fold-enter-active,
+.vol-detail-fold-leave-active {
+  transition: opacity var(--transition-normal), transform var(--transition-normal);
+  transform-origin: top;
+}
+
+.vol-detail-fold-enter-from,
+.vol-detail-fold-leave-to {
+  opacity: 0;
+  transform: scaleY(0.95);
+}
+
+.vol-detail-fold-enter-to,
+.vol-detail-fold-leave-from {
+  opacity: 1;
+  transform: scaleY(1);
 }
 
 .vol-detail__section {
   margin-top: 14px;
+}
+
+.vol-detail__section--block {
+  padding: 12px 14px;
+  background: var(--bg-nested);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
 }
 
 .vol-detail__label {

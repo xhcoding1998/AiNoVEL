@@ -73,7 +73,7 @@ function prevChapter() {
 }
 
 function scrollToTop() {
-  const el = document.querySelector('.preview-content')
+  const el = document.querySelector('.preview-article')
   if (el) el.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
@@ -175,8 +175,13 @@ const formattedContent = computed(() => {
 
 <style scoped>
 .preview-wrapper {
-  margin: -32px -24px;
-  min-height: calc(100vh - 100px);
+  height: calc(100vh - 260px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
 }
 
 .preview-empty {
@@ -202,7 +207,9 @@ const formattedContent = computed(() => {
 
 .preview-layout {
   display: flex;
-  min-height: calc(100vh - 100px);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .preview-toc {
@@ -212,6 +219,7 @@ const formattedContent = computed(() => {
   background: var(--bg-secondary);
   display: flex;
   flex-direction: column;
+  min-height: 0;
   overflow: hidden;
   transition: width var(--transition-normal), opacity var(--transition-normal);
 }
@@ -242,6 +250,7 @@ const formattedContent = computed(() => {
 
 .preview-toc__nav {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 8px;
 }
@@ -296,10 +305,10 @@ const formattedContent = computed(() => {
 .preview-content {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  max-height: calc(100vh - 100px);
+  overflow: hidden;
 }
 
 .preview-toolbar {
@@ -330,6 +339,8 @@ const formattedContent = computed(() => {
 
 .preview-article {
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   max-width: 680px;
   margin: 0 auto;
   padding: 40px 24px 60px;
@@ -358,7 +369,7 @@ const formattedContent = computed(() => {
 
 .preview-article__outline {
   padding: 20px;
-  background: var(--bg-tertiary);
+  background: var(--bg-nested);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
 }

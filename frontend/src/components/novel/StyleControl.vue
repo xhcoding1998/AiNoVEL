@@ -8,6 +8,7 @@ import VTextarea from '../ui/VTextarea.vue'
 import VInput from '../ui/VInput.vue'
 import VButton from '../ui/VButton.vue'
 import VCard from '../ui/VCard.vue'
+import VAccordionItem from '../ui/VAccordionItem.vue'
 
 const route = useRoute()
 const store = useNovelStore()
@@ -19,6 +20,7 @@ watch(dataVersion, () => loadData())
 
 const form = ref({ writing_style: '', rhythm_requirement: '', romance_ratio: '', taboos: '', red_lines: '' })
 const saving = ref(false)
+const openSections = ref({ writing_style: false, rhythm_requirement: false, romance_ratio: false, taboos: false, red_lines: false })
 
 async function loadData() {
   await store.fetchWritingStyle(pid)
@@ -64,12 +66,22 @@ async function handleRegen() {
       <VButton variant="primary" size="sm" :loading="regenerating" @click="handleRegen">生成</VButton>
     </div>
 
-    <div class="form-grid">
-      <VTextarea v-model="form.writing_style" label="文风要求" placeholder="整体文风描述，如：简洁凌厉、细腻温柔、诙谐幽默..." :rows="3" />
-      <VTextarea v-model="form.rhythm_requirement" label="节奏要求" placeholder="章节节奏、爽点频率、松弛有度..." :rows="2" />
-      <VInput v-model="form.romance_ratio" label="感情线比例" placeholder="如：30%、主线穿插、独立支线..." />
-      <VTextarea v-model="form.taboos" label="禁忌项" placeholder="创作中不能出现的内容或情节..." :rows="2" />
-      <VTextarea v-model="form.red_lines" label="红线控制" placeholder="绝对不能触碰的底线..." :rows="2" />
+    <div class="accordion-list">
+      <VAccordionItem title="文风要求" :open="openSections.writing_style" @toggle="openSections.writing_style = !openSections.writing_style">
+        <VTextarea v-model="form.writing_style" placeholder="整体文风描述，如：简洁凌厉、细腻温柔、诙谐幽默..." :rows="3" />
+      </VAccordionItem>
+      <VAccordionItem title="节奏要求" :open="openSections.rhythm_requirement" @toggle="openSections.rhythm_requirement = !openSections.rhythm_requirement">
+        <VTextarea v-model="form.rhythm_requirement" placeholder="章节节奏、爽点频率、松弛有度..." :rows="2" />
+      </VAccordionItem>
+      <VAccordionItem title="感情线比例" :open="openSections.romance_ratio" @toggle="openSections.romance_ratio = !openSections.romance_ratio">
+        <VInput v-model="form.romance_ratio" placeholder="如：30%、主线穿插、独立支线..." />
+      </VAccordionItem>
+      <VAccordionItem title="禁忌项" :open="openSections.taboos" @toggle="openSections.taboos = !openSections.taboos">
+        <VTextarea v-model="form.taboos" placeholder="创作中不能出现的内容或情节..." :rows="2" />
+      </VAccordionItem>
+      <VAccordionItem title="红线控制" :open="openSections.red_lines" @toggle="openSections.red_lines = !openSections.red_lines">
+        <VTextarea v-model="form.red_lines" placeholder="绝对不能触碰的底线..." :rows="2" />
+      </VAccordionItem>
     </div>
     <template #footer>
       <VButton variant="primary" :loading="saving" @click="save">保存</VButton>
@@ -105,9 +117,9 @@ async function handleRegen() {
 
 .regen-bar .v-input { flex: 1; }
 
-.form-grid {
+.accordion-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-2);
 }
 </style>

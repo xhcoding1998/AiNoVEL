@@ -272,7 +272,7 @@ const roleColorMap = { male_lead: '#0070f3', female_lead: '#8b5cf6', supporting:
 .graph-card {
   margin-bottom: 24px;
   overflow: hidden;
-  background: var(--bg-tertiary);
+  background: var(--bg-nested);
   border-radius: var(--radius-lg);
 }
 

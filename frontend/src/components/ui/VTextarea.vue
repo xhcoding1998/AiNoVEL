@@ -6,6 +6,7 @@ defineProps({
   rows: { type: Number, default: 4 },
   minRows: { type: Number, default: 3 },
   maxHeight: { type: Number, default: 500 },
+  noResize: { type: Boolean, default: false },
   error: { type: String, default: '' },
   disabled: { type: Boolean, default: false }
 })
@@ -14,7 +15,7 @@ defineEmits(['update:modelValue'])
 </script>
 
 <template>
-  <div class="v-textarea" :class="{ 'v-textarea--error': error }">
+  <div class="v-textarea" :class="{ 'v-textarea--error': error, 'v-textarea--no-resize': noResize }">
     <label v-if="label" class="v-textarea__label">{{ label }}</label>
     <textarea
       class="v-textarea__field"
@@ -53,8 +54,13 @@ defineEmits(['update:modelValue'])
   font-size: 14px;
   line-height: 1.7;
   resize: vertical;
-  min-height: 80px;
+  min-height: 280px;
+  overflow-y: auto;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.v-textarea--no-resize .v-textarea__field {
+  resize: none;
 }
 
 .v-textarea__field::placeholder {

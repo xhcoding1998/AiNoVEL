@@ -76,7 +76,7 @@ onMounted(() => nextTick(updateIndicator))
 }
 
 .v-tabs__item--active {
-  color: var(--text-primary);
+  color: var(--tab-active-color);
 }
 
 .v-tabs__indicator {
@@ -84,7 +84,7 @@ onMounted(() => nextTick(updateIndicator))
   bottom: 0;
   left: 0;
   height: 2px;
-  background: var(--accent-primary);
+  background: var(--tab-indicator);
   border-radius: 1px 1px 0 0;
   transition: all 300ms var(--ease-out-expo);
 }

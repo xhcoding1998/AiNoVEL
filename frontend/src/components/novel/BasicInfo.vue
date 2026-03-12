@@ -10,6 +10,7 @@ import VTextarea from '../ui/VTextarea.vue'
 import VSelect from '../ui/VSelect.vue'
 import VButton from '../ui/VButton.vue'
 import VCard from '../ui/VCard.vue'
+import VAccordionItem from '../ui/VAccordionItem.vue'
 
 const route = useRoute()
 const store = useNovelStore()
@@ -25,6 +26,7 @@ const form = ref({
 })
 const saving = ref(false)
 const pid = route.params.id
+const openSections = ref({ core_selling_point: false, one_line_summary: false, target_readers: false })
 
 const genreOptions = [
   '都市', '玄幻', '仙侠', '科幻', '悬疑', '言情', '历史', '军事', '游戏', '体育', '灵异', '二次元', '其他'
@@ -89,9 +91,17 @@ async function handleRegen() {
         <VSelect v-model="form.genre" label="题材" :options="genreOptions" />
         <VSelect v-model="form.style" label="风格" :options="styleOptions" />
       </div>
-      <VTextarea v-model="form.core_selling_point" label="核心卖点" placeholder="这本书最吸引人的地方是什么？" :rows="4" />
-      <VTextarea v-model="form.one_line_summary" label="一句话主线" placeholder="用一句话概括整个故事" :rows="3" />
-      <VTextarea v-model="form.target_readers" label="目标读者" placeholder="你的目标读者画像" :rows="3" />
+      <div class="accordion-list">
+        <VAccordionItem title="核心卖点" :open="openSections.core_selling_point" @toggle="openSections.core_selling_point = !openSections.core_selling_point">
+          <VTextarea v-model="form.core_selling_point" placeholder="这本书最吸引人的地方是什么？" :rows="4" />
+        </VAccordionItem>
+        <VAccordionItem title="一句话主线" :open="openSections.one_line_summary" @toggle="openSections.one_line_summary = !openSections.one_line_summary">
+          <VTextarea v-model="form.one_line_summary" placeholder="用一句话概括整个故事" :rows="3" />
+        </VAccordionItem>
+        <VAccordionItem title="目标读者" :open="openSections.target_readers" @toggle="openSections.target_readers = !openSections.target_readers">
+          <VTextarea v-model="form.target_readers" placeholder="你的目标读者画像" :rows="3" />
+        </VAccordionItem>
+      </div>
     </div>
     <template #footer>
       <VButton variant="primary" :loading="saving" @click="save">保存</VButton>
@@ -137,5 +147,11 @@ async function handleRegen() {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-4);
+}
+
+.accordion-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 </style>

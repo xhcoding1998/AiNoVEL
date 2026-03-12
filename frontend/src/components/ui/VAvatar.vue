@@ -8,14 +8,6 @@ const props = defineProps({
 })
 
 const initial = computed(() => props.name ? props.name.charAt(0).toUpperCase() : '?')
-
-const bgColor = computed(() => {
-  if (props.color) return props.color
-  const colors = ['#333', '#3b3b3b', '#444', '#2a2a2a', '#383838', '#404040']
-  let hash = 0
-  for (const ch of props.name) hash = ch.charCodeAt(0) + ((hash << 5) - hash)
-  return colors[Math.abs(hash) % colors.length]
-})
 </script>
 
 <template>
@@ -24,8 +16,7 @@ const bgColor = computed(() => {
     :style="{
       width: `${size}px`,
       height: `${size}px`,
-      fontSize: `${size * 0.4}px`,
-      background: bgColor
+      fontSize: `${size * 0.4}px`
     }"
   >
     {{ initial }}
@@ -43,6 +34,8 @@ const bgColor = computed(() => {
   flex-shrink: 0;
   user-select: none;
   letter-spacing: -0.02em;
+  border: 1px solid var(--border-default);
+  background: var(--bg-primary);
   border: 1px solid var(--border-default);
 }
 </style>
