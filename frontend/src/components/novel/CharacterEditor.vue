@@ -25,6 +25,7 @@ const {
 } = useAIRegenerate()
 const pid = route.params.id
 const dataVersion = inject('dataVersion', ref(0))
+const isGenerating = inject('isParentGenerating', ref(false))
 watch(dataVersion, () => loadData())
 
 const showEditor = ref(false)
@@ -109,7 +110,7 @@ async function aiGenerateChar() {
         <h3 class="section-title" style="margin:0">角色设定</h3>
       </div>
       <div class="flex gap-2">
-        <VButton variant="ghost" size="sm" @click="showRegenInput = !showRegenInput" :loading="regenerating">
+        <VButton variant="ghost" size="sm" @click="showRegenInput = !showRegenInput" :loading="regenerating" :disabled="isGenerating">
           AI 重新生成
         </VButton>
         <VButton variant="primary" size="sm" @click="openCreate">添加角色</VButton>
@@ -118,7 +119,7 @@ async function aiGenerateChar() {
 
     <div v-if="showRegenInput" class="regen-bar">
       <VInput v-model="regenPrompt" placeholder="补充指令（可选），如：增加一个亦正亦邪的角色..." />
-      <VButton variant="primary" size="sm" :loading="regenerating" @click="handleRegenClick">生成</VButton>
+      <VButton variant="primary" size="sm" :loading="regenerating" :disabled="isGenerating" @click="handleRegenClick">生成</VButton>
     </div>
 
     <div v-if="store.characters.length" class="char-grid">
@@ -168,7 +169,7 @@ async function aiGenerateChar() {
           </VButton>
           <div class="modal-footer-right">
             <VButton variant="secondary" @click="showEditor = false">取消</VButton>
-            <VButton variant="primary" :loading="saving" @click="saveChar">保存</VButton>
+            <VButton variant="primary" :loading="saving" :disabled="isGenerating" @click="saveChar">保存</VButton>
           </div>
         </div>
       </template>

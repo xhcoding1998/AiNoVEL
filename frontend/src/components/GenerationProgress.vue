@@ -1,17 +1,23 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import GenerationLog from './GenerationLog.vue'
 
 const props = defineProps({
   status: { type: String, default: 'idle' },
   currentStep: { type: String, default: null },
   completedSteps: { type: Array, default: () => [] },
   steps: { type: Array, default: () => [] },
-  stepLabels: { type: Object, default: () => ({}) }
+  stepLabels: { type: Object, default: () => ({}) },
+  projectId: { type: [String, Number], default: null }
 })
 
 const emit = defineEmits(['continue', 'regenerate'])
 
 const expanded = ref(false)
+
+watch(() => props.status, (val) => {
+  if (val === 'generating') expanded.value = true
+}, { immediate: true })
 
 const progress = computed(() => {
   if (!props.steps.length) return 0
@@ -75,33 +81,40 @@ function getStepState(step) {
     </div>
 
     <Transition name="slide">
-      <div v-if="expanded" class="gen-banner__detail">
-        <div
-          v-for="(step, i) in steps"
-          :key="step"
-          class="gen-detail-step"
-          :class="`gen-detail-step--${getStepState(step)}`"
-        >
-          <div class="gen-detail-step__icon">
-            <template v-if="getStepState(step) === 'done'">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M2.5 6.5L4.5 8.5L9.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </template>
-            <template v-else-if="getStepState(step) === 'active'">
-              <div class="gen-detail-step__pulse" />
-            </template>
-            <template v-else-if="getStepState(step) === 'failed'">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-            </template>
-            <template v-else>
-              <span class="gen-detail-step__num">{{ i + 1 }}</span>
-            </template>
+      <div v-if="expanded" class="gen-banner__detail-wrap">
+        <div class="gen-banner__detail">
+          <div
+            v-for="(step, i) in steps"
+            :key="step"
+            class="gen-detail-step"
+            :class="`gen-detail-step--${getStepState(step)}`"
+          >
+            <div class="gen-detail-step__icon">
+              <template v-if="getStepState(step) === 'done'">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path d="M2.5 6.5L4.5 8.5L9.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </template>
+              <template v-else-if="getStepState(step) === 'active'">
+                <div class="gen-detail-step__pulse" />
+              </template>
+              <template v-else-if="getStepState(step) === 'failed'">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+              </template>
+              <template v-else>
+                <span class="gen-detail-step__num">{{ i + 1 }}</span>
+              </template>
+            </div>
+            <span class="gen-detail-step__label">{{ stepLabels[step] || step }}</span>
           </div>
-          <span class="gen-detail-step__label">{{ stepLabels[step] || step }}</span>
         </div>
+        <GenerationLog
+          v-if="projectId && (status === 'generating' || status === 'failed')"
+          :project-id="projectId"
+          :active="status === 'generating'"
+        />
       </div>
     </Transition>
   </div>
@@ -254,13 +267,14 @@ function getStepState(step) {
 }
 
 /* Detail panel */
+.gen-banner__detail-wrap {
+  border-top: 1px solid var(--border-default);
+  padding: 10px 12px;
+}
+
 .gen-banner__detail {
   display: flex;
   gap: 2px;
-  padding: 0 12px 10px;
-  border-top: 1px solid var(--border-default);
-  padding-top: 10px;
-  margin-top: 0;
 }
 
 .gen-detail-step {
@@ -363,8 +377,8 @@ function getStepState(step) {
 
 .slide-enter-active,
 .slide-leave-active {
-  transition: all 0.25s ease;
-  max-height: 100px;
+  transition: all 0.3s ease;
+  max-height: 400px;
   overflow: hidden;
 }
 

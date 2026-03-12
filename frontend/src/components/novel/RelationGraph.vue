@@ -25,6 +25,7 @@ const {
 } = useAIRegenerate()
 const pid = route.params.id
 const dataVersion = inject('dataVersion', ref(0))
+const isGenerating = inject('isParentGenerating', ref(false))
 watch(dataVersion, () => loadData())
 
 const { graphData, layout, viewBox } = useGraph(
@@ -140,7 +141,7 @@ const roleColorMap = { male_lead: '#0070f3', female_lead: '#8b5cf6', supporting:
         <h3 class="section-title" style="margin:0">人物关系图</h3>
       </div>
       <div class="section-header__actions">
-        <VButton variant="ghost" size="sm" @click="showRegenInput = !showRegenInput" :loading="regenerating">
+        <VButton variant="ghost" size="sm" @click="showRegenInput = !showRegenInput" :loading="regenerating" :disabled="isGenerating">
           AI 重新生成
         </VButton>
         <VButton variant="secondary" size="sm" @click="openAddRelation">添加关系</VButton>
@@ -149,7 +150,7 @@ const roleColorMap = { male_lead: '#0070f3', female_lead: '#8b5cf6', supporting:
 
     <div v-if="showRegenInput" class="regen-bar">
       <VInput v-model="regenPrompt" placeholder="补充指令（可选），如：增加更复杂的利益纠葛..." />
-      <VButton variant="primary" size="sm" :loading="regenerating" @click="handleRegenClick">生成</VButton>
+      <VButton variant="primary" size="sm" :loading="regenerating" :disabled="isGenerating" @click="handleRegenClick">生成</VButton>
     </div>
 
     <VCard v-if="graphData.nodes.length" padding="sm" class="graph-card">
@@ -271,7 +272,7 @@ const roleColorMap = { male_lead: '#0070f3', female_lead: '#8b5cf6', supporting:
           </VButton>
           <div class="modal-footer-right">
             <VButton variant="secondary" @click="showAddRelation = false">取消</VButton>
-            <VButton variant="primary" :loading="saving" @click="saveRelation">保存</VButton>
+            <VButton variant="primary" :loading="saving" :disabled="isGenerating" @click="saveRelation">保存</VButton>
           </div>
         </div>
       </template>

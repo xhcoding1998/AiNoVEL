@@ -23,9 +23,10 @@ export async function callAI(userConfig, systemPrompt, userPrompt, options = {})
   }
 
   const baseUrl = apiUrl.replace(/\/+$/, '')
+  const onChunk = options.onChunk || null
 
-  const result = await tryResponsesAPI(baseUrl, apiKey, model, systemPrompt, userPrompt, options)
-    || await tryChatCompletionsAPI(baseUrl, apiKey, model, systemPrompt, userPrompt, options)
+  const result = await tryStreamingChat(baseUrl, apiKey, model, systemPrompt, userPrompt, options, onChunk)
+    || await tryNonStreamingChat(baseUrl, apiKey, model, systemPrompt, userPrompt, options, onChunk)
 
   if (!result) {
     throw new Error('AI接口调用失败：两种协议均不可用')
@@ -34,19 +35,26 @@ export async function callAI(userConfig, systemPrompt, userPrompt, options = {})
   return result
 }
 
-async function tryResponsesAPI(baseUrl, apiKey, model, systemPrompt, userPrompt, options) {
-  const url = baseUrl.endsWith('/chat/completions') ? baseUrl : `${baseUrl}/chat/completions`
+async function tryStreamingChat(baseUrl, apiKey, model, systemPrompt, userPrompt, options, onChunk) {
+  let url = baseUrl
+  if (!url.endsWith('/chat/completions')) {
+    url = url.replace(/\/responses$/, '') + '/chat/completions'
+  }
 
   const body = {
     model,
+    stream: true,
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt }
-    ]
+    ],
+    temperature: options.temperature ?? 0.8,
+    max_tokens: options.max_tokens ?? 128000
   }
 
-  if (options.temperature != null) body.temperature = options.temperature
-  if (options.max_tokens) body.max_output_tokens = options.max_tokens
+  if (options.json_mode) {
+    body.response_format = { type: 'json_object' }
+  }
 
   try {
     const response = await fetch(url, {
@@ -60,32 +68,52 @@ async function tryResponsesAPI(baseUrl, apiKey, model, systemPrompt, userPrompt,
 
     if (!response.ok) return null
 
-    const data = await response.json()
+    const contentType = response.headers.get('content-type') || ''
+    if (!contentType.includes('text/event-stream') && !contentType.includes('text/plain')) {
+      const data = await response.json()
+      const text = data.choices?.[0]?.message?.content
+        || (data.output && typeof data.output === 'string' ? data.output : null)
+      if (text && onChunk) onChunk(text)
+      return text || null
+    }
 
-    if (data.output) {
-      for (const item of data.output) {
-        if (item.type === 'message' && item.content) {
-          for (const block of item.content) {
-            if (block.type === 'output_text' || block.type === 'text') {
-              return block.text
-            }
+    let fullText = ''
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed || !trimmed.startsWith('data:')) continue
+        const payload = trimmed.slice(5).trim()
+        if (payload === '[DONE]') continue
+
+        try {
+          const json = JSON.parse(payload)
+          const delta = json.choices?.[0]?.delta?.content
+          if (delta) {
+            fullText += delta
+            if (onChunk) onChunk(delta)
           }
-        }
+        } catch { /* skip malformed SSE lines */ }
       }
-      if (typeof data.output === 'string') return data.output
     }
 
-    if (data.choices?.[0]?.message?.content) {
-      return data.choices[0].message.content
-    }
-
-    return null
+    return fullText || null
   } catch {
     return null
   }
 }
 
-async function tryChatCompletionsAPI(baseUrl, apiKey, model, systemPrompt, userPrompt, options) {
+async function tryNonStreamingChat(baseUrl, apiKey, model, systemPrompt, userPrompt, options, onChunk) {
   let url = baseUrl
   if (!url.endsWith('/chat/completions')) {
     url = url.replace(/\/responses$/, '') + '/chat/completions'
@@ -121,7 +149,9 @@ async function tryChatCompletionsAPI(baseUrl, apiKey, model, systemPrompt, userP
     }
 
     const data = await response.json()
-    return data.choices?.[0]?.message?.content || null
+    const text = data.choices?.[0]?.message?.content || null
+    if (text && onChunk) onChunk(text)
+    return text
   } catch (e) {
     if (e.message?.includes('AI接口返回错误')) throw e
     return null

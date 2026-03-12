@@ -21,6 +21,7 @@ const store = useNovelStore()
 const toast = useToast()
 const pid = route.params.id
 const dataVersion = inject('dataVersion', ref(0))
+const isGenerating = inject('isParentGenerating', ref(false))
 watch(dataVersion, () => loadAll())
 
 const regenPlot = useAIRegenerate()
@@ -132,14 +133,14 @@ const tabs = [{ label: '故事主线', value: 'storyline' }, { label: '分卷大
                 </svg>
                 <span>故事主线</span>
               </div>
-              <VButton variant="ghost" size="sm" @click="regenPlot.showRegenInput.value = !regenPlot.showRegenInput.value" :loading="regenPlot.regenerating.value">
+              <VButton variant="ghost" size="sm" @click="regenPlot.showRegenInput.value = !regenPlot.showRegenInput.value" :loading="regenPlot.regenerating.value" :disabled="isGenerating">
                 AI 重新生成
               </VButton>
             </div>
           </template>
           <div v-if="regenPlot.showRegenInput.value" class="regen-bar">
             <VInput v-model="regenPlot.regenPrompt.value" placeholder="补充指令（可选）..." />
-            <VButton variant="primary" size="sm" :loading="regenPlot.regenerating.value" @click="handlePlotRegenClick">生成</VButton>
+            <VButton variant="primary" size="sm" :loading="regenPlot.regenerating.value" :disabled="isGenerating" @click="handlePlotRegenClick">生成</VButton>
           </div>
           <div class="accordion-list">
             <VAccordionItem title="故事主线" :open="openPlotSections.main_storyline" @toggle="openPlotSections.main_storyline = !openPlotSections.main_storyline">
@@ -150,7 +151,7 @@ const tabs = [{ label: '故事主线', value: 'storyline' }, { label: '分卷大
             </VAccordionItem>
           </div>
           <template #footer>
-            <VButton variant="primary" :loading="saving" @click="savePlot">保存</VButton>
+            <VButton variant="primary" :loading="saving" :disabled="isGenerating" @click="savePlot">保存</VButton>
           </template>
         </VCard>
       </template>
@@ -159,7 +160,7 @@ const tabs = [{ label: '故事主线', value: 'storyline' }, { label: '分卷大
         <div class="sub-header">
           <span class="sub-title">分卷大纲</span>
           <div class="flex gap-2">
-            <VButton variant="ghost" size="sm" @click="regenVol.showRegenInput.value = !regenVol.showRegenInput.value" :loading="regenVol.regenerating.value">
+            <VButton variant="ghost" size="sm" @click="regenVol.showRegenInput.value = !regenVol.showRegenInput.value" :loading="regenVol.regenerating.value" :disabled="isGenerating">
               AI 重新生成
             </VButton>
             <VButton variant="primary" size="sm" @click="openAddVolume">添加卷</VButton>
@@ -167,7 +168,7 @@ const tabs = [{ label: '故事主线', value: 'storyline' }, { label: '分卷大
         </div>
         <div v-if="regenVol.showRegenInput.value" class="regen-bar">
           <VInput v-model="regenVol.regenPrompt.value" placeholder="补充指令（可选）..." />
-          <VButton variant="primary" size="sm" :loading="regenVol.regenerating.value" @click="handleVolRegenClick">生成</VButton>
+            <VButton variant="primary" size="sm" :loading="regenVol.regenerating.value" :disabled="isGenerating" @click="handleVolRegenClick">生成</VButton>
         </div>
         <div class="vol-list">
           <VCard v-for="vol in store.volumes" :key="vol.id" padding="sm">
@@ -221,7 +222,7 @@ const tabs = [{ label: '故事主线', value: 'storyline' }, { label: '分卷大
           </VButton>
           <div class="modal-footer-right">
             <VButton variant="secondary" @click="showVolumeModal = false">取消</VButton>
-            <VButton variant="primary" :loading="saving" @click="saveVolume">保存</VButton>
+            <VButton variant="primary" :loading="saving" :disabled="isGenerating" @click="saveVolume">保存</VButton>
           </div>
         </div>
       </template>
@@ -239,7 +240,7 @@ const tabs = [{ label: '故事主线', value: 'storyline' }, { label: '分卷大
       </div>
       <template #footer>
         <VButton variant="secondary" @click="showDeviceModal = false">取消</VButton>
-        <VButton variant="primary" :loading="saving" @click="saveDevice">保存</VButton>
+        <VButton variant="primary" :loading="saving" :disabled="isGenerating" @click="saveDevice">保存</VButton>
       </template>
     </VModal>
 

@@ -23,6 +23,7 @@ const {
   requestRegenerate, confirmRegenerate, cancelRegenerate
 } = useAIRegenerate()
 const dataVersion = inject('dataVersion', ref(0))
+const isGenerating = inject('isParentGenerating', ref(false))
 watch(dataVersion, () => loadData())
 
 const form = ref({
@@ -79,7 +80,7 @@ function handleRegenClick() {
           </svg>
           <span>基础信息</span>
         </div>
-        <VButton variant="ghost" size="sm" @click="showRegenInput = !showRegenInput" :loading="regenerating">
+        <VButton variant="ghost" size="sm" @click="showRegenInput = !showRegenInput" :loading="regenerating" :disabled="isGenerating">
           AI 重新生成
         </VButton>
       </div>
@@ -87,7 +88,7 @@ function handleRegenClick() {
 
     <div v-if="showRegenInput" class="regen-bar">
       <VInput v-model="regenPrompt" placeholder="补充指令（可选），如：换成玄幻题材..." />
-      <VButton variant="primary" size="sm" :loading="regenerating" @click="handleRegenClick">生成</VButton>
+      <VButton variant="primary" size="sm" :loading="regenerating" :disabled="isGenerating" @click="handleRegenClick">生成</VButton>
     </div>
 
     <div class="form-grid">
@@ -109,7 +110,7 @@ function handleRegenClick() {
       </div>
     </div>
     <template #footer>
-      <VButton variant="primary" :loading="saving" @click="save">保存</VButton>
+      <VButton variant="primary" :loading="saving" :disabled="isGenerating" @click="save">保存</VButton>
     </template>
   </VCard>
 

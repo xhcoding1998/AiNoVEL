@@ -57,7 +57,38 @@ function switchTab(val) {
 }
 
 const isGenerating = computed(() => genStatus.value === 'generating')
+provide('isParentGenerating', isGenerating)
 const showProgress = computed(() => genStatus.value !== 'idle')
+
+const tabStepMap = {
+  'basic-info': ['basic_info'],
+  'world-building': ['world_building'],
+  'characters': ['characters'],
+  'relations': ['relations'],
+  'plot': ['plot_control', 'volumes'],
+  'style': ['writing_style'],
+  'chapters': null,
+  'preview': null
+}
+
+const disabledTabs = computed(() => {
+  if (genStatus.value === 'idle') return []
+
+  const disabled = []
+  const allDone = genStatus.value === 'completed'
+
+  for (const tab of tabs) {
+    const steps = tabStepMap[tab.value]
+    if (steps === null) {
+      if (!allDone) disabled.push(tab.value)
+    } else if (steps) {
+      const anyDone = steps.some(s => completedSteps.value.includes(s))
+      const anyCurrent = steps.some(s => genStep.value === s)
+      if (!anyDone && !anyCurrent) disabled.push(tab.value)
+    }
+  }
+  return disabled
+})
 
 async function checkStatus() {
   try {
@@ -188,11 +219,12 @@ watch(() => route.params.id, async (id) => {
         :completed-steps="completedSteps"
         :steps="allSteps"
         :step-labels="stepLabels"
+        :project-id="route.params.id"
         @continue="handleContinue"
         @regenerate="showRegenModal = true"
       />
 
-      <VTabs :tabs="tabs" :model-value="currentTab" :disabled="isGenerating" @update:model-value="switchTab" />
+      <VTabs :tabs="tabs" :model-value="currentTab" :disabled-tabs="disabledTabs" @update:model-value="switchTab" />
 
       <div class="project-content">
         <router-view :generation-status="genStatus" />

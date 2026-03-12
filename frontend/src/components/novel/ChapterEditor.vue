@@ -19,6 +19,7 @@ const toast = useToast()
 const { showRegenInput, regenPrompt, regenerating, regenerateSection } = useAIRegenerate()
 const pid = route.params.id
 const dataVersion = inject('dataVersion', ref(0))
+const isGenerating = inject('isParentGenerating', ref(false))
 watch(dataVersion, () => loadData())
 
 const showEditor = ref(false)
@@ -280,7 +281,7 @@ const totalWords = computed(() => {
         <h3 class="section-title" style="margin:0">章节管理</h3>
       </div>
       <div class="section-header__actions">
-        <VButton variant="ghost" size="sm" @click="showRegenInput = !showRegenInput" :loading="regenerating">
+        <VButton variant="ghost" size="sm" @click="showRegenInput = !showRegenInput" :loading="regenerating" :disabled="isGenerating">
           AI 重新生成卷
         </VButton>
         <VButton variant="secondary" size="sm" @click="openCreate" :disabled="!selectedVolume">添加章节</VButton>
@@ -418,7 +419,7 @@ const totalWords = computed(() => {
       </div>
       <template #footer>
         <VButton variant="secondary" @click="showEditor = false">取消</VButton>
-        <VButton variant="primary" :loading="saving" @click="saveChapter">保存</VButton>
+        <VButton variant="primary" :loading="saving" :disabled="isGenerating" @click="saveChapter">保存</VButton>
       </template>
     </VModal>
   </div>

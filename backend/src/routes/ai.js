@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import sql from '../db/index.js'
-import { authMiddleware } from '../middleware/auth.js'
+import { authMiddleware, verifyToken } from '../middleware/auth.js'
 import { compileMaterial } from '../services/material.js'
 import { callAI, buildStepPrompt, buildChapterOutlinesPrompt, buildChapterContentPrompt, GENERATION_STEPS, STEP_LABELS } from '../services/ai.js'
 import { parseAndSaveSection } from '../services/parser.js'
@@ -272,6 +272,35 @@ ai.get('/:id/preview', async (c) => {
   })
 })
 
+// ---------- Logging helper ----------
+
+async function writeLog(projectId, taskId, level, message) {
+  try {
+    await sql`INSERT INTO generation_logs (project_id, task_id, level, message) VALUES (${projectId}, ${taskId}, ${level}, ${message})`
+  } catch { /* best-effort logging */ }
+}
+
+function createChunkLogger(projectId, taskId) {
+  let buffer = ''
+  const FLUSH_SIZE = 80
+  return {
+    push(text) {
+      buffer += text
+      if (buffer.length >= FLUSH_SIZE) {
+        const chunk = buffer
+        buffer = ''
+        writeLog(projectId, taskId, 'chunk', chunk)
+      }
+    },
+    async flush() {
+      if (buffer) {
+        await writeLog(projectId, taskId, 'chunk', buffer)
+        buffer = ''
+      }
+    }
+  }
+}
+
 // ---------- Background processors ----------
 
 const STEP_MAX_TOKENS = {
@@ -287,9 +316,11 @@ const STEP_MAX_TOKENS = {
 async function processStepByStep(taskId, projectId, prompt, userConfig, startIdx) {
   for (let i = startIdx; i < GENERATION_STEPS.length; i++) {
     const step = GENERATION_STEPS[i]
+    const label = STEP_LABELS[step] || step
 
     try {
       await sql`UPDATE projects SET generation_step = ${step}, updated_at = NOW() WHERE id = ${projectId}`
+      await writeLog(projectId, taskId, 'info', `开始生成「${label}」...`)
 
       let existingMaterial = {}
       try {
@@ -300,13 +331,20 @@ async function processStepByStep(taskId, projectId, prompt, userConfig, startIdx
       const systemPrompt = buildStepPrompt(step, prompt, existingMaterial)
       const userPrompt = prompt || '请根据已有物料生成本部分内容'
       const maxTokens = STEP_MAX_TOKENS[step] || 128000
-      const result = await callAI(userConfig, systemPrompt, userPrompt, { json_mode: true, max_tokens: maxTokens })
+      const chunker = createChunkLogger(projectId, taskId)
+      const result = await callAI(userConfig, systemPrompt, userPrompt, {
+        json_mode: true, max_tokens: maxTokens,
+        onChunk: (t) => chunker.push(t)
+      })
+      await chunker.flush()
 
       await parseAndSaveSection(projectId, step, result)
       await compileMaterial(projectId)
+      await writeLog(projectId, taskId, 'success', `「${label}」生成完成`)
 
     } catch (err) {
       console.error(`Step ${step} failed:`, err)
+      await writeLog(projectId, taskId, 'error', `「${label}」生成失败: ${err.message || '未知错误'}`)
       await sql`UPDATE ai_tasks SET status = 'failed', result = ${err.message || '未知错误'}, completed_at = NOW() WHERE id = ${taskId}`
 
       const [proj] = await sql`SELECT name FROM projects WHERE id = ${projectId}`
@@ -316,12 +354,16 @@ async function processStepByStep(taskId, projectId, prompt, userConfig, startIdx
     }
   }
 
+  await writeLog(projectId, taskId, 'success', '全部物料生成完成')
   await sql`UPDATE ai_tasks SET status = 'completed', completed_at = NOW() WHERE id = ${taskId}`
   await sql`UPDATE projects SET generation_status = 'completed', generation_step = NULL, updated_at = NOW() WHERE id = ${projectId}`
 }
 
 async function processSingleSection(taskId, projectId, section, prompt, userConfig) {
+  const label = STEP_LABELS[section] || section
   try {
+    await writeLog(projectId, taskId, 'info', `开始重新生成「${label}」...`)
+
     let existingMaterial = {}
     try {
       const material = await compileMaterial(projectId)
@@ -331,15 +373,22 @@ async function processSingleSection(taskId, projectId, section, prompt, userConf
     const systemPrompt = buildStepPrompt(section, prompt, existingMaterial)
     const userPrompt = prompt || `请重新生成该部分内容，保持与其他部分的一致性`
     const maxTokens = STEP_MAX_TOKENS[section] || 128000
-    const result = await callAI(userConfig, systemPrompt, userPrompt, { json_mode: true, max_tokens: maxTokens })
+    const chunker = createChunkLogger(projectId, taskId)
+    const result = await callAI(userConfig, systemPrompt, userPrompt, {
+      json_mode: true, max_tokens: maxTokens,
+      onChunk: (t) => chunker.push(t)
+    })
+    await chunker.flush()
 
     await parseAndSaveSection(projectId, section, result)
     await compileMaterial(projectId)
 
+    await writeLog(projectId, taskId, 'success', `「${label}」重新生成完成`)
     await sql`UPDATE ai_tasks SET status = 'completed', result = ${result}, completed_at = NOW() WHERE id = ${taskId}`
     await sql`UPDATE projects SET generation_status = 'completed', generation_step = NULL, updated_at = NOW() WHERE id = ${projectId}`
   } catch (err) {
     console.error('Section generation failed:', err)
+    await writeLog(projectId, taskId, 'error', `「${label}」生成失败: ${err.message || '未知错误'}`)
     await sql`UPDATE ai_tasks SET status = 'failed', result = ${err.message || '未知错误'}, completed_at = NOW() WHERE id = ${taskId}`
     await sql`UPDATE projects SET generation_status = 'failed', generation_step = ${section}, updated_at = NOW() WHERE id = ${projectId}`
   }
@@ -347,6 +396,8 @@ async function processSingleSection(taskId, projectId, section, prompt, userConf
 
 async function processChapterOutlines(taskId, projectId, volume, prompt, userConfig) {
   try {
+    await writeLog(projectId, taskId, 'info', `开始生成第${volume.volume_number}卷章节大纲...`)
+
     let material = {}
     try {
       const [latest] = await sql`SELECT content FROM materials WHERE project_id = ${projectId} ORDER BY version DESC LIMIT 1`
@@ -355,12 +406,16 @@ async function processChapterOutlines(taskId, projectId, volume, prompt, userCon
 
     const systemPrompt = buildChapterOutlinesPrompt(volume, material)
     const userPrompt = prompt || `请为第${volume.volume_number}卷生成章节大纲`
-    const result = await callAI(userConfig, systemPrompt, userPrompt, { json_mode: true, max_tokens: 8192 })
+    const chunker = createChunkLogger(projectId, taskId)
+    const result = await callAI(userConfig, systemPrompt, userPrompt, {
+      json_mode: true, max_tokens: 8192,
+      onChunk: (t) => chunker.push(t)
+    })
+    await chunker.flush()
 
     const data = JSON.parse(result.trim().replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, ''))
     const chapters = data.chapters || data
 
-    // Delete existing chapters for this volume
     await sql`DELETE FROM chapters WHERE volume_id = ${volume.id} AND project_id = ${projectId}`
 
     for (const ch of chapters) {
@@ -370,15 +425,19 @@ async function processChapterOutlines(taskId, projectId, volume, prompt, userCon
           ${outline}, 'draft', ${ch.word_target || 3000})`
     }
 
+    await writeLog(projectId, taskId, 'success', `第${volume.volume_number}卷章节大纲生成完成，共 ${chapters.length} 章`)
     await sql`UPDATE ai_tasks SET status = 'completed', result = ${result}, completed_at = NOW() WHERE id = ${taskId}`
   } catch (err) {
     console.error('Chapter outline generation failed:', err)
+    await writeLog(projectId, taskId, 'error', `章节大纲生成失败: ${err.message || '未知错误'}`)
     await sql`UPDATE ai_tasks SET status = 'failed', result = ${err.message || '未知错误'}, completed_at = NOW() WHERE id = ${taskId}`
   }
 }
 
 async function processChapterContent(taskId, projectId, chapter, volume, userConfig) {
   try {
+    await writeLog(projectId, taskId, 'info', `开始生成第${volume.volume_number}卷第${chapter.chapter_number}章「${chapter.title}」正文...`)
+
     let material = {}
     try {
       const [latest] = await sql`SELECT content FROM materials WHERE project_id = ${projectId} ORDER BY version DESC LIMIT 1`
@@ -387,7 +446,12 @@ async function processChapterContent(taskId, projectId, chapter, volume, userCon
 
     const systemPrompt = buildChapterContentPrompt(chapter, volume, material)
     const userPrompt = `请写出第${volume.volume_number}卷第${chapter.chapter_number}章「${chapter.title}」的完整正文`
-    const result = await callAI(userConfig, systemPrompt, userPrompt, { json_mode: true, max_tokens: 16384 })
+    const chunker = createChunkLogger(projectId, taskId)
+    const result = await callAI(userConfig, systemPrompt, userPrompt, {
+      json_mode: true, max_tokens: 16384,
+      onChunk: (t) => chunker.push(t)
+    })
+    await chunker.flush()
 
     const data = JSON.parse(result.trim().replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, ''))
     const content = data.content || ''
@@ -395,12 +459,90 @@ async function processChapterContent(taskId, projectId, chapter, volume, userCon
     const wordCount = content.length
 
     await sql`UPDATE chapters SET title = ${title}, content = ${content}, word_count = ${wordCount}, status = 'completed', updated_at = NOW() WHERE id = ${chapter.id}`
+    await writeLog(projectId, taskId, 'success', `第${chapter.chapter_number}章正文生成完成，共 ${wordCount} 字`)
     await sql`UPDATE ai_tasks SET status = 'completed', result = ${`已生成 ${wordCount} 字`}, completed_at = NOW() WHERE id = ${taskId}`
   } catch (err) {
     console.error('Chapter content generation failed:', err)
+    await writeLog(projectId, taskId, 'error', `正文生成失败: ${err.message || '未知错误'}`)
     await sql`UPDATE ai_tasks SET status = 'failed', result = ${err.message || '未知错误'}, completed_at = NOW() WHERE id = ${taskId}`
   }
 }
+
+// ---------- Log endpoints ----------
+
+ai.get('/:id/generation-logs', async (c) => {
+  const pid = await verifyProjectOwner(c)
+  if (!pid) return c.json({ error: '项目不存在' }, 404)
+
+  const taskId = c.req.query('task_id')
+  const afterId = parseInt(c.req.query('after_id')) || 0
+  const limit = Math.min(parseInt(c.req.query('limit')) || 200, 500)
+
+  let rows
+  if (taskId) {
+    rows = await sql`SELECT id, level, message, created_at FROM generation_logs WHERE project_id = ${pid} AND task_id = ${taskId} AND id > ${afterId} ORDER BY id ASC LIMIT ${limit}`
+  } else {
+    rows = await sql`SELECT id, level, message, created_at FROM generation_logs WHERE project_id = ${pid} AND id > ${afterId} ORDER BY id ASC LIMIT ${limit}`
+  }
+
+  return c.json({ data: rows })
+})
+
+ai.get('/:id/generation-logs/stream', async (c) => {
+  // SSE: EventSource can't send headers, accept token from query
+  let pid
+  const queryToken = c.req.query('token')
+  if (queryToken) {
+    try {
+      const payload = verifyToken(queryToken)
+      const projectId = c.req.param('id')
+      const [p] = await sql`SELECT id FROM projects WHERE id = ${projectId} AND user_id = ${payload.id}`
+      pid = p ? projectId : null
+    } catch {
+      return c.json({ error: '认证失败' }, 401)
+    }
+  } else {
+    pid = await verifyProjectOwner(c)
+  }
+  if (!pid) return c.json({ error: '项目不存在' }, 404)
+
+  let lastId = parseInt(c.req.query('after_id')) || 0
+  let closed = false
+
+  const stream = new ReadableStream({
+    start(controller) {
+      const encoder = new TextEncoder()
+      const send = (data) => {
+        try { controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`)) } catch { /* closed */ }
+      }
+
+      const poll = setInterval(async () => {
+        if (closed) { clearInterval(poll); return }
+        try {
+          const rows = await sql`SELECT id, level, message, created_at FROM generation_logs WHERE project_id = ${pid} AND id > ${lastId} ORDER BY id ASC LIMIT 50`
+          for (const row of rows) {
+            send(row)
+            lastId = row.id
+          }
+        } catch { /* ignore db errors during poll */ }
+      }, 1500)
+
+      c.req.raw.signal?.addEventListener('abort', () => {
+        closed = true
+        clearInterval(poll)
+        try { controller.close() } catch { /* already closed */ }
+      })
+    }
+  })
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive'
+    }
+  })
+})
 
 function buildSingleItemPrompt(itemType, existingMaterial, userContext) {
   const ctx = existingMaterial && Object.keys(existingMaterial).length
