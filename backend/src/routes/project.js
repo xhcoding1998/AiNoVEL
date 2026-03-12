@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import sql from '../db/index.js'
 import { authMiddleware } from '../middleware/auth.js'
-import { callAI, buildStepPrompt, GENERATION_STEPS } from '../services/ai.js'
+import { callAI, buildStepPrompt, GENERATION_STEPS, STEP_LABELS } from '../services/ai.js'
 import { parseAndSaveSection } from '../services/parser.js'
 import { compileMaterial } from '../services/material.js'
 
@@ -24,8 +24,13 @@ async function triggerStepByStep(projectId, prompt, userConfig) {
         if (latest) existingMaterial = latest.content
       } catch { /* first run */ }
 
+      const STEP_MAX_TOKENS = {
+        basic_info: 4096, world_building: 8192, characters: 8192,
+        relations: 8192, plot_control: 8192, volumes: 8192, writing_style: 4096
+      }
       const systemPrompt = buildStepPrompt(step, prompt, existingMaterial)
-      const result = await callAI(userConfig, systemPrompt, prompt, { json_mode: true, max_tokens: 128000 })
+      const maxTokens = STEP_MAX_TOKENS[step] || 8192
+      const result = await callAI(userConfig, systemPrompt, prompt, { json_mode: true, max_tokens: maxTokens })
 
       await parseAndSaveSection(projectId, step, result)
       await compileMaterial(projectId)

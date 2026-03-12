@@ -50,8 +50,6 @@ function switchTab(val) {
 }
 
 const isGenerating = computed(() => genStatus.value === 'generating')
-const isFailed = computed(() => genStatus.value === 'failed')
-const isCompleted = computed(() => genStatus.value === 'completed')
 const showProgress = computed(() => genStatus.value !== 'idle')
 
 async function checkStatus() {
@@ -218,7 +216,7 @@ watch(() => route.params.id, async (id) => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
   gap: 16px;
 }
 
@@ -274,7 +272,7 @@ watch(() => route.params.id, async (id) => {
 }
 
 .project-content {
-  padding-top: 24px;
+  padding-top: 20px;
 }
 
 .modal-overlay {

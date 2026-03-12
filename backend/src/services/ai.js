@@ -324,6 +324,19 @@ JSON 结构：
 }
 
 function buildWritingStylePrompt(userPrompt, existing) {
+  const parts = []
+  if (existing?.basic_info) {
+    const bi = existing.basic_info
+    parts.push(`书名: ${bi.book_name || ''}, 类型: ${bi.genre || ''}, 风格: ${bi.style || ''}`)
+  }
+  if (existing?.characters?.length) {
+    parts.push(`角色: ${existing.characters.map(c => `${c.name}(${c.role_type})`).join(', ')}`)
+  }
+  if (existing?.plot_control) {
+    parts.push(`主线: ${(existing.plot_control.main_storyline || '').slice(0, 200)}`)
+  }
+  const contextHint = parts.length ? `\n\n【已有物料摘要】\n${parts.join('\n')}` : ''
+
   return `你是一位文学风格顾问，请基于已有的小说策划物料，制定精确的写作风格控制方案。
 
 ${JSON_RULE}
@@ -331,18 +344,18 @@ ${JSON_RULE}
 JSON 结构：
 {
   "writing_style": {
-    "writing_style": "文风要求（200字以上，包括：①叙事人称与视角策略 ②语言风格（简洁凌厉/华丽繁复/口语化/书面化） ③描写重点偏向（动作/心理/对话/环境） ④特殊手法（倒叙/多视角/意识流/蒙太奇等） ⑤对标作品的文风参考）",
-    "rhythm_requirement": "节奏要求（200字以上，包括：①场景切换频率 ②快节奏战斗/慢节奏日常的占比 ③章末钩子的使用策略 ④信息释放节奏 ⑤每章推荐字数与信息密度）",
-    "romance_ratio": "感情线比例与处理方式（100字以上，包括：占比、推进节奏、甜虐比例、是否有多角关系、感情线如何与主线交织）",
-    "taboos": "禁忌项（列举具体的创作禁区：不写什么类型的情节、不用什么手法、避免什么价值观倾向、人物底线等）",
-    "red_lines": "红线控制（列举绝对不能突破的底线：法律法规红线、平台规范、角色人设底线、剧情逻辑底线等）"
+    "writing_style": "文风要求（150字左右，包括：叙事人称与视角、语言风格、描写重点、特殊手法、对标作品参考）",
+    "rhythm_requirement": "节奏要求（150字左右，包括：场景切换频率、快慢节奏占比、章末钩子策略、信息释放节奏）",
+    "romance_ratio": "感情线比例与处理方式（80字左右，包括：占比、推进节奏、甜虐比例）",
+    "taboos": "禁忌项（列举创作禁区，80字左右）",
+    "red_lines": "红线控制（列举不能突破的底线，80字左右）"
   }
 }
 
 要求：
 1. 文风要求必须具体到可执行，不要"文笔优美"这种空话
 2. 节奏要求要考虑网文读者的碎片化阅读习惯
-3. 禁忌和红线要实际可操作${contextBlock(existing)}`
+3. 禁忌和红线要实际可操作${contextHint}`
 }
 
 // Legacy: full generation prompt (still used for single-call regen)

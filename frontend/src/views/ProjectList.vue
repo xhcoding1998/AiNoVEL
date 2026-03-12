@@ -62,11 +62,28 @@ const statusMap = {
   completed: { label: '已完成', variant: 'success' }
 }
 
-const genStatusMap = {
-  idle: null,
-  generating: { label: '生成中', variant: 'warning' },
-  completed: { label: '已生成', variant: 'success' },
-  failed: { label: '生成失败', variant: 'danger' }
+const STEP_LABELS = {
+  basic_info: '基础信息',
+  world_building: '世界观',
+  characters: '角色设定',
+  relations: '人物关系',
+  plot_control: '剧情总控',
+  volumes: '分卷大纲',
+  writing_style: '风格控制'
+}
+
+function getGenStatus(proj) {
+  if (proj.generation_status === 'idle') return null
+  if (proj.generation_status === 'generating') {
+    const stepName = STEP_LABELS[proj.generation_step] || ''
+    return { label: stepName ? `生成中·${stepName}` : '生成中', variant: 'warning' }
+  }
+  if (proj.generation_status === 'completed') return { label: '已生成', variant: 'success' }
+  if (proj.generation_status === 'failed') {
+    const stepName = STEP_LABELS[proj.generation_step] || ''
+    return { label: stepName ? `${stepName}失败` : '生成失败', variant: 'danger' }
+  }
+  return null
 }
 </script>
 
@@ -111,8 +128,8 @@ const genStatusMap = {
               <VBadge :variant="statusMap[proj.status]?.variant || 'default'">
                 {{ statusMap[proj.status]?.label || proj.status }}
               </VBadge>
-              <VBadge v-if="genStatusMap[proj.generation_status]" :variant="genStatusMap[proj.generation_status].variant">
-                {{ genStatusMap[proj.generation_status].label }}
+              <VBadge v-if="getGenStatus(proj)" :variant="getGenStatus(proj).variant">
+                {{ getGenStatus(proj).label }}
               </VBadge>
             </div>
             <span class="project-item__date">
