@@ -2,8 +2,8 @@ import { Hono } from 'hono'
 import sql from '../db/index.js'
 import { authMiddleware } from '../middleware/auth.js'
 import { compileMaterial } from '../services/material.js'
-import { callAI, buildFullGenerationPrompt, buildSectionGenerationPrompt } from '../services/ai.js'
-import { parseAndSaveAll, parseAndSaveSection } from '../services/parser.js'
+import { callAI, buildStepPrompt, GENERATION_STEPS, STEP_LABELS } from '../services/ai.js'
+import { parseAndSaveSection } from '../services/parser.js'
 
 const ai = new Hono()
 ai.use('*', authMiddleware)
@@ -20,16 +20,43 @@ async function getUserAIConfig(userId) {
   return user
 }
 
-// Get generation status
+// Get generation status with step info
 ai.get('/:id/generation-status', async (c) => {
   const pid = await verifyProjectOwner(c)
   if (!pid) return c.json({ error: '项目不存在' }, 404)
-  const [proj] = await sql`SELECT generation_status FROM projects WHERE id = ${pid}`
-  const tasks = await sql`SELECT id, task_type, status, created_at, completed_at FROM ai_tasks WHERE project_id = ${pid} ORDER BY created_at DESC LIMIT 10`
-  return c.json({ status: proj.generation_status, tasks })
+
+  const [proj] = await sql`SELECT generation_status, generation_step FROM projects WHERE id = ${pid}`
+  const tasks = await sql`
+    SELECT id, task_type, status, prompt, result, created_at, completed_at
+    FROM ai_tasks WHERE project_id = ${pid} ORDER BY created_at DESC LIMIT 10
+  `
+
+  const completedSteps = []
+  if (proj.generation_status === 'generating' && proj.generation_step) {
+    const currentIdx = GENERATION_STEPS.indexOf(proj.generation_step)
+    for (let i = 0; i < currentIdx; i++) {
+      completedSteps.push(GENERATION_STEPS[i])
+    }
+  } else if (proj.generation_status === 'completed') {
+    completedSteps.push(...GENERATION_STEPS)
+  } else if (proj.generation_status === 'failed' && proj.generation_step) {
+    const failIdx = GENERATION_STEPS.indexOf(proj.generation_step)
+    for (let i = 0; i < failIdx; i++) {
+      completedSteps.push(GENERATION_STEPS[i])
+    }
+  }
+
+  return c.json({
+    status: proj.generation_status,
+    currentStep: proj.generation_step,
+    completedSteps,
+    steps: GENERATION_STEPS,
+    stepLabels: STEP_LABELS,
+    tasks
+  })
 })
 
-// Full generation: AI generates all 7 categories at once
+// Full generation: step-by-step with progress
 ai.post('/:id/generate-all', async (c) => {
   const pid = await verifyProjectOwner(c)
   if (!pid) return c.json({ error: '项目不存在' }, 404)
@@ -38,32 +65,32 @@ ai.post('/:id/generate-all', async (c) => {
   const userId = c.get('userId')
   const userConfig = await getUserAIConfig(userId)
 
-  // Mark as generating
-  await sql`UPDATE projects SET generation_status = 'generating', initial_prompt = ${prompt || ''}, updated_at = NOW() WHERE id = ${pid}`
+  await sql`UPDATE projects SET generation_status = 'generating', generation_step = ${GENERATION_STEPS[0]}, initial_prompt = ${prompt || ''}, updated_at = NOW() WHERE id = ${pid}`
 
-  // Create task record
   const [task] = await sql`
     INSERT INTO ai_tasks (project_id, task_type, status, prompt)
     VALUES (${pid}, 'full_generation', 'running', ${prompt || ''})
     RETURNING *
   `
 
-  // Run in background
-  processFullGeneration(task.id, pid, prompt, userConfig).catch(console.error)
+  processStepByStep(task.id, pid, prompt, userConfig, 0).catch(console.error)
 
   return c.json({ data: task })
 })
 
-// Section regeneration: AI regenerates one specific category
-ai.post('/:id/generate-section', async (c) => {
+// Continue generation from failed step
+ai.post('/:id/continue-generation', async (c) => {
   const pid = await verifyProjectOwner(c)
   if (!pid) return c.json({ error: '项目不存在' }, 404)
 
-  const { section, prompt } = await c.req.json()
-  const validSections = ['basic_info', 'world_building', 'characters', 'relations', 'plot_control', 'volumes', 'writing_style']
-  if (!validSections.includes(section)) {
-    return c.json({ error: '无效的物料类别' }, 400)
+  const [proj] = await sql`SELECT generation_status, generation_step, initial_prompt FROM projects WHERE id = ${pid}`
+
+  if (proj.generation_status !== 'failed' || !proj.generation_step) {
+    return c.json({ error: '当前不需要继续生成' }, 400)
   }
+
+  const startIdx = GENERATION_STEPS.indexOf(proj.generation_step)
+  if (startIdx === -1) return c.json({ error: '无效的生成步骤' }, 400)
 
   const userId = c.get('userId')
   const userConfig = await getUserAIConfig(userId)
@@ -72,16 +99,42 @@ ai.post('/:id/generate-section', async (c) => {
 
   const [task] = await sql`
     INSERT INTO ai_tasks (project_id, task_type, status, prompt)
-    VALUES (${pid}, ${`regen_${section}`}, 'running', ${prompt || ''})
+    VALUES (${pid}, 'continue_generation', 'running', ${proj.initial_prompt || ''})
     RETURNING *
   `
 
-  processSectionGeneration(task.id, pid, section, prompt, userConfig).catch(console.error)
+  processStepByStep(task.id, pid, proj.initial_prompt, userConfig, startIdx).catch(console.error)
 
   return c.json({ data: task })
 })
 
-// Get all AI tasks for a project
+// Section regeneration
+ai.post('/:id/generate-section', async (c) => {
+  const pid = await verifyProjectOwner(c)
+  if (!pid) return c.json({ error: '项目不存在' }, 404)
+
+  const { section, prompt } = await c.req.json()
+  if (!GENERATION_STEPS.includes(section)) {
+    return c.json({ error: '无效的物料类别' }, 400)
+  }
+
+  const userId = c.get('userId')
+  const userConfig = await getUserAIConfig(userId)
+
+  await sql`UPDATE projects SET generation_status = 'generating', generation_step = ${section}, updated_at = NOW() WHERE id = ${pid}`
+
+  const [task] = await sql`
+    INSERT INTO ai_tasks (project_id, task_type, status, prompt)
+    VALUES (${pid}, ${`regen_${section}`}, 'running', ${prompt || ''})
+    RETURNING *
+  `
+
+  processSingleSection(task.id, pid, section, prompt, userConfig).catch(console.error)
+
+  return c.json({ data: task })
+})
+
+// Get all AI tasks
 ai.get('/:id/ai-tasks', async (c) => {
   const pid = await verifyProjectOwner(c)
   if (!pid) return c.json({ error: '项目不存在' }, 404)
@@ -116,54 +169,65 @@ ai.get('/:id/material', async (c) => {
   return c.json({ data: material || null })
 })
 
-async function processFullGeneration(taskId, projectId, prompt, userConfig) {
-  try {
-    // Get existing material for context (may be empty for new projects)
-    let existingMaterial = {}
+// ---------- Background processors ----------
+
+async function processStepByStep(taskId, projectId, prompt, userConfig, startIdx) {
+  for (let i = startIdx; i < GENERATION_STEPS.length; i++) {
+    const step = GENERATION_STEPS[i]
+
     try {
-      const [latest] = await sql`SELECT content FROM materials WHERE project_id = ${projectId} ORDER BY version DESC LIMIT 1`
-      if (latest) existingMaterial = latest.content
-    } catch { /* ignore */ }
+      await sql`UPDATE projects SET generation_step = ${step}, updated_at = NOW() WHERE id = ${projectId}`
 
-    const systemPrompt = buildFullGenerationPrompt(existingMaterial)
-    const result = await callAI(userConfig, systemPrompt, prompt || '请根据项目设定生成完整的小说策划物料', { json_mode: true, max_tokens: 8192 })
+      let existingMaterial = {}
+      try {
+        const [latest] = await sql`SELECT content FROM materials WHERE project_id = ${projectId} ORDER BY version DESC LIMIT 1`
+        if (latest) existingMaterial = latest.content
+      } catch { /* first run, no material yet */ }
 
-    // Parse and save to all 7 tables
-    await parseAndSaveAll(projectId, result)
+      const systemPrompt = buildStepPrompt(step, prompt, existingMaterial)
+      const userPrompt = prompt || '请根据已有物料生成本部分内容'
+      const result = await callAI(userConfig, systemPrompt, userPrompt, { json_mode: true, max_tokens: 8192 })
 
-    // Compile material snapshot
-    await compileMaterial(projectId)
+      await parseAndSaveSection(projectId, step, result)
+      await compileMaterial(projectId)
 
-    await sql`UPDATE ai_tasks SET status = 'completed', result = ${result}, completed_at = NOW() WHERE id = ${taskId}`
-    await sql`UPDATE projects SET generation_status = 'completed', updated_at = NOW() WHERE id = ${projectId}`
-  } catch (err) {
-    console.error('Full generation failed:', err)
-    await sql`UPDATE ai_tasks SET status = 'failed', result = ${err.message || '未知错误'} WHERE id = ${taskId}`
-    const [proj] = await sql`SELECT name FROM projects WHERE id = ${projectId}`
-    if (proj?.name === '生成中...') {
-      await sql`UPDATE projects SET name = '未命名项目', generation_status = 'failed', updated_at = NOW() WHERE id = ${projectId}`
-    } else {
-      await sql`UPDATE projects SET generation_status = 'failed', updated_at = NOW() WHERE id = ${projectId}`
+    } catch (err) {
+      console.error(`Step ${step} failed:`, err)
+      await sql`UPDATE ai_tasks SET status = 'failed', result = ${err.message || '未知错误'}, completed_at = NOW() WHERE id = ${taskId}`
+
+      const [proj] = await sql`SELECT name FROM projects WHERE id = ${projectId}`
+      const newName = proj?.name === '生成中...' ? '未命名项目' : proj?.name
+      await sql`UPDATE projects SET name = ${newName}, generation_status = 'failed', generation_step = ${step}, updated_at = NOW() WHERE id = ${projectId}`
+      return
     }
   }
+
+  // All steps completed
+  await sql`UPDATE ai_tasks SET status = 'completed', completed_at = NOW() WHERE id = ${taskId}`
+  await sql`UPDATE projects SET generation_status = 'completed', generation_step = NULL, updated_at = NOW() WHERE id = ${projectId}`
 }
 
-async function processSectionGeneration(taskId, projectId, section, prompt, userConfig) {
+async function processSingleSection(taskId, projectId, section, prompt, userConfig) {
   try {
-    const material = await compileMaterial(projectId)
-    const systemPrompt = buildSectionGenerationPrompt(section, material.content)
+    let existingMaterial = {}
+    try {
+      const material = await compileMaterial(projectId)
+      existingMaterial = material.content
+    } catch { /* ignore */ }
+
+    const systemPrompt = buildStepPrompt(section, prompt, existingMaterial)
     const userPrompt = prompt || `请重新生成该部分内容，保持与其他部分的一致性`
-    const result = await callAI(userConfig, systemPrompt, userPrompt, { json_mode: true, max_tokens: 4096 })
+    const result = await callAI(userConfig, systemPrompt, userPrompt, { json_mode: true, max_tokens: 8192 })
 
     await parseAndSaveSection(projectId, section, result)
     await compileMaterial(projectId)
 
     await sql`UPDATE ai_tasks SET status = 'completed', result = ${result}, completed_at = NOW() WHERE id = ${taskId}`
-    await sql`UPDATE projects SET generation_status = 'completed', updated_at = NOW() WHERE id = ${projectId}`
+    await sql`UPDATE projects SET generation_status = 'completed', generation_step = NULL, updated_at = NOW() WHERE id = ${projectId}`
   } catch (err) {
     console.error('Section generation failed:', err)
-    await sql`UPDATE ai_tasks SET status = 'failed', result = ${err.message || '未知错误'} WHERE id = ${taskId}`
-    await sql`UPDATE projects SET generation_status = 'failed', updated_at = NOW() WHERE id = ${projectId}`
+    await sql`UPDATE ai_tasks SET status = 'failed', result = ${err.message || '未知错误'}, completed_at = NOW() WHERE id = ${taskId}`
+    await sql`UPDATE projects SET generation_status = 'failed', generation_step = ${section}, updated_at = NOW() WHERE id = ${projectId}`
   }
 }
 

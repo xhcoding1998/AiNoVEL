@@ -1,35 +1,47 @@
 import { Hono } from 'hono'
 import sql from '../db/index.js'
 import { authMiddleware } from '../middleware/auth.js'
-import { callAI, buildFullGenerationPrompt } from '../services/ai.js'
-import { parseAndSaveAll } from '../services/parser.js'
+import { callAI, buildStepPrompt, GENERATION_STEPS } from '../services/ai.js'
+import { parseAndSaveSection } from '../services/parser.js'
 import { compileMaterial } from '../services/material.js'
 
-async function triggerFullGeneration(projectId, prompt, userConfig) {
-  try {
-    const [task] = await sql`
-      INSERT INTO ai_tasks (project_id, task_type, status, prompt)
-      VALUES (${projectId}, 'full_generation', 'running', ${prompt})
-      RETURNING *
-    `
-    const systemPrompt = buildFullGenerationPrompt({})
-    const result = await callAI(userConfig, systemPrompt, prompt, { json_mode: true, max_tokens: 8192 })
+async function triggerStepByStep(projectId, prompt, userConfig) {
+  const [task] = await sql`
+    INSERT INTO ai_tasks (project_id, task_type, status, prompt)
+    VALUES (${projectId}, 'full_generation', 'running', ${prompt})
+    RETURNING *
+  `
 
-    await parseAndSaveAll(projectId, result)
-    await compileMaterial(projectId)
+  for (let i = 0; i < GENERATION_STEPS.length; i++) {
+    const step = GENERATION_STEPS[i]
 
-    await sql`UPDATE ai_tasks SET status = 'completed', result = ${result}, completed_at = NOW() WHERE id = ${task.id}`
-    await sql`UPDATE projects SET generation_status = 'completed', updated_at = NOW() WHERE id = ${projectId}`
-  } catch (err) {
-    console.error('Auto generation failed:', err)
-    // Revert name from "生成中..." if no book_name was generated
-    const [proj] = await sql`SELECT name FROM projects WHERE id = ${projectId}`
-    if (proj?.name === '生成中...') {
-      await sql`UPDATE projects SET name = '未命名项目', generation_status = 'failed', updated_at = NOW() WHERE id = ${projectId}`
-    } else {
-      await sql`UPDATE projects SET generation_status = 'failed', updated_at = NOW() WHERE id = ${projectId}`
+    try {
+      await sql`UPDATE projects SET generation_step = ${step}, updated_at = NOW() WHERE id = ${projectId}`
+
+      let existingMaterial = {}
+      try {
+        const [latest] = await sql`SELECT content FROM materials WHERE project_id = ${projectId} ORDER BY version DESC LIMIT 1`
+        if (latest) existingMaterial = latest.content
+      } catch { /* first run */ }
+
+      const systemPrompt = buildStepPrompt(step, prompt, existingMaterial)
+      const result = await callAI(userConfig, systemPrompt, prompt, { json_mode: true, max_tokens: 8192 })
+
+      await parseAndSaveSection(projectId, step, result)
+      await compileMaterial(projectId)
+
+    } catch (err) {
+      console.error(`Step ${step} failed:`, err)
+      await sql`UPDATE ai_tasks SET status = 'failed', result = ${err.message || '未知错误'}, completed_at = NOW() WHERE id = ${task.id}`
+      const [proj] = await sql`SELECT name FROM projects WHERE id = ${projectId}`
+      const newName = proj?.name === '生成中...' ? '未命名项目' : proj?.name
+      await sql`UPDATE projects SET name = ${newName}, generation_status = 'failed', generation_step = ${step}, updated_at = NOW() WHERE id = ${projectId}`
+      return
     }
   }
+
+  await sql`UPDATE ai_tasks SET status = 'completed', completed_at = NOW() WHERE id = ${task.id}`
+  await sql`UPDATE projects SET generation_status = 'completed', generation_step = NULL, updated_at = NOW() WHERE id = ${projectId}`
 }
 
 const project = new Hono()
@@ -58,8 +70,8 @@ project.post('/', async (c) => {
 
   const projectName = name || '生成中...'
   const [proj] = await sql`
-    INSERT INTO projects (user_id, name, initial_prompt, generation_status)
-    VALUES (${userId}, ${projectName}, ${prompt || ''}, ${prompt ? 'generating' : 'idle'})
+    INSERT INTO projects (user_id, name, initial_prompt, generation_status, generation_step)
+    VALUES (${userId}, ${projectName}, ${prompt || ''}, ${prompt ? 'generating' : 'idle'}, ${prompt ? 'basic_info' : null})
     RETURNING *
   `
   await sql`INSERT INTO basic_info (project_id) VALUES (${proj.id})`
@@ -67,10 +79,9 @@ project.post('/', async (c) => {
   await sql`INSERT INTO plot_control (project_id) VALUES (${proj.id})`
   await sql`INSERT INTO writing_style (project_id) VALUES (${proj.id})`
 
-  // If prompt is provided, trigger AI generation in background
   if (prompt) {
     const [user] = await sql`SELECT ai_api_url, ai_api_key, ai_model FROM users WHERE id = ${userId}`
-    triggerFullGeneration(proj.id, prompt, user).catch(console.error)
+    triggerStepByStep(proj.id, prompt, user).catch(console.error)
   }
 
   return c.json({ project: proj })

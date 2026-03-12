@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useNovelStore } from '../../stores/novel'
 import { useToast } from '../../composables/useToast'
@@ -29,6 +29,10 @@ const statusOptions = [
   { label: '已完成', value: 'completed' }, { label: '已修订', value: 'revised' }
 ]
 const statusVariantMap = { draft: 'default', writing: 'info', completed: 'success', revised: 'purple' }
+
+const currentVolume = computed(() => {
+  return store.volumes.find(v => v.id === selectedVolume.value)
+})
 
 async function loadData() {
   await store.fetchVolumes(pid)
@@ -66,14 +70,12 @@ async function handleRegen() {
 
 <template>
   <div>
-    <div class="chapter-header">
-      <h3 class="section-title" style="margin:0">章节管理</h3>
-      <div class="flex gap-2">
+    <!-- Header bar -->
+    <div class="section-header">
+      <h3 class="section-title">章节管理</h3>
+      <div class="section-header__actions">
         <VButton variant="ghost" size="sm" @click="showRegenInput = !showRegenInput" :loading="regenerating">
           AI 重新生成卷
-        </VButton>
-        <VButton v-for="vol in store.volumes" :key="vol.id" :variant="selectedVolume === vol.id ? 'primary' : 'secondary'" size="sm" @click="switchVolume(vol.id)">
-          第{{ vol.volume_number }}卷
         </VButton>
         <VButton variant="secondary" size="sm" @click="openCreate" :disabled="!selectedVolume">添加章节</VButton>
       </div>
@@ -84,21 +86,64 @@ async function handleRegen() {
       <VButton variant="primary" size="sm" :loading="regenerating" @click="handleRegen">生成</VButton>
     </div>
 
-    <p v-if="!store.volumes.length" class="empty-text">AI 尚未生成分卷大纲</p>
+    <p v-if="!store.volumes.length" class="empty-state">
+      <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+        <rect x="6" y="4" width="28" height="32" rx="3" stroke="var(--text-tertiary)" stroke-width="1.5" fill="none"/>
+        <line x1="12" y1="12" x2="28" y2="12" stroke="var(--text-tertiary)" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="12" y1="18" x2="24" y2="18" stroke="var(--text-tertiary)" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="12" y1="24" x2="20" y2="24" stroke="var(--text-tertiary)" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <span>AI 尚未生成分卷大纲</span>
+    </p>
 
-    <div v-else-if="store.chapters.length" class="chapter-list">
-      <VCard v-for="ch in store.chapters" :key="ch.id" padding="sm" hoverable>
-        <div class="chapter-item" @click="openEdit(ch)">
-          <div class="chapter-item__head">
-            <span class="chapter-item__num">第{{ ch.chapter_number }}章</span>
-            <span class="chapter-item__title">{{ ch.title || '无标题' }}</span>
-            <VBadge :variant="statusVariantMap[ch.status] || 'default'">{{ statusOptions.find(s => s.value === ch.status)?.label || ch.status }}</VBadge>
-          </div>
-          <div class="chapter-item__meta"><span>{{ ch.word_count || 0 }} 字</span></div>
+    <template v-else>
+      <!-- Volume selector -->
+      <div class="vol-tabs">
+        <button
+          v-for="vol in store.volumes"
+          :key="vol.id"
+          class="vol-tab"
+          :class="{ 'vol-tab--active': selectedVolume === vol.id }"
+          @click="switchVolume(vol.id)"
+        >
+          <span class="vol-tab__num">第{{ vol.volume_number }}卷</span>
+          <span v-if="vol.title" class="vol-tab__title">{{ vol.title.replace(/^第[^：:]+[：:]/, '') }}</span>
+        </button>
+      </div>
+
+      <!-- Volume detail card -->
+      <VCard v-if="currentVolume" class="vol-detail">
+        <div class="vol-detail__head">
+          <h4 class="vol-detail__title">{{ currentVolume.title }}</h4>
+        </div>
+        <div v-if="currentVolume.goal" class="vol-detail__section">
+          <label class="vol-detail__label">本卷目标</label>
+          <p class="vol-detail__text">{{ currentVolume.goal }}</p>
+        </div>
+        <div v-if="currentVolume.summary" class="vol-detail__section">
+          <label class="vol-detail__label">内容概要</label>
+          <p class="vol-detail__text vol-detail__text--summary">{{ currentVolume.summary }}</p>
         </div>
       </VCard>
-    </div>
-    <p v-else class="empty-text">本卷暂无章节</p>
+
+      <!-- Chapter list -->
+      <div v-if="store.chapters.length" class="chapter-list">
+        <div class="chapter-list__title">章节列表</div>
+        <VCard v-for="ch in store.chapters" :key="ch.id" padding="sm" hoverable>
+          <div class="chapter-item" @click="openEdit(ch)">
+            <div class="chapter-item__head">
+              <span class="chapter-item__num">第{{ ch.chapter_number }}章</span>
+              <span class="chapter-item__title">{{ ch.title || '无标题' }}</span>
+              <VBadge :variant="statusVariantMap[ch.status] || 'default'">
+                {{ statusOptions.find(s => s.value === ch.status)?.label || ch.status }}
+              </VBadge>
+            </div>
+            <div v-if="ch.word_count" class="chapter-item__meta">{{ ch.word_count }} 字</div>
+          </div>
+        </VCard>
+      </div>
+      <p v-else class="empty-hint">本卷暂无章节，点击"添加章节"开始写作</p>
+    </template>
 
     <VModal v-model="showEditor" :title="chapterForm.id ? '编辑章节' : '添加章节'" width="720px">
       <div class="form-grid">
@@ -118,16 +163,163 @@ async function handleRegen() {
 </template>
 
 <style scoped>
-.chapter-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-4); flex-wrap: wrap; gap: var(--space-2); }
-.regen-bar { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); padding-bottom: var(--space-4); border-bottom: 1px solid var(--border-default); }
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.section-title {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.section-header__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.regen-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border-default);
+}
+
 .regen-bar .v-input { flex: 1; }
-.chapter-list { display: flex; flex-direction: column; gap: var(--space-2); }
+
+.empty-state {
+  text-align: center;
+  padding: 48px 0;
+  color: var(--text-tertiary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.vol-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.vol-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  transition: all 0.15s;
+  cursor: pointer;
+  white-space: nowrap;
+  min-width: 100px;
+}
+
+.vol-tab:hover {
+  border-color: var(--border-hover);
+}
+
+.vol-tab--active {
+  border-color: var(--accent-blue);
+  background: rgba(0, 112, 243, 0.06);
+}
+
+.vol-tab__num {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.vol-tab--active .vol-tab__num {
+  color: var(--accent-blue);
+}
+
+.vol-tab__title {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vol-detail {
+  margin-bottom: 24px;
+}
+
+.vol-detail__head {
+  margin-bottom: 16px;
+}
+
+.vol-detail__title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.vol-detail__section {
+  margin-top: 14px;
+}
+
+.vol-detail__label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  margin-bottom: 6px;
+  display: block;
+}
+
+.vol-detail__text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.vol-detail__text--summary {
+  white-space: pre-wrap;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.chapter-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chapter-list__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
 .chapter-item { cursor: pointer; }
-.chapter-item__head { display: flex; align-items: center; gap: var(--space-2); }
+.chapter-item__head { display: flex; align-items: center; gap: 8px; }
 .chapter-item__num { font-weight: 600; font-size: 13px; color: var(--text-secondary); }
 .chapter-item__title { font-weight: 500; font-size: 14px; flex: 1; }
-.chapter-item__meta { font-size: 12px; color: var(--text-tertiary); margin-top: var(--space-1); }
-.form-grid { display: flex; flex-direction: column; gap: var(--space-4); }
-.form-row { display: grid; grid-template-columns: 1fr 2fr; gap: var(--space-4); }
-.empty-text { color: var(--text-tertiary); text-align: center; padding: var(--space-8); }
+.chapter-item__meta { font-size: 12px; color: var(--text-tertiary); margin-top: 4px; }
+.form-grid { display: flex; flex-direction: column; gap: 16px; }
+.form-row { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; }
+
+.empty-hint {
+  color: var(--text-tertiary);
+  text-align: center;
+  padding: 32px 0;
+  font-size: 13px;
+}
 </style>

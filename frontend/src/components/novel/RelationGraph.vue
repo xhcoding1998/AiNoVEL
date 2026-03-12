@@ -11,6 +11,7 @@ import VModal from '../ui/VModal.vue'
 import VInput from '../ui/VInput.vue'
 import VSelect from '../ui/VSelect.vue'
 import VTextarea from '../ui/VTextarea.vue'
+import VBadge from '../ui/VBadge.vue'
 
 const route = useRoute()
 const store = useNovelStore()
@@ -25,14 +26,17 @@ const { graphData, layout, viewBox } = useGraph(
 
 const showAddRelation = ref(false)
 const saving = ref(false)
+const expandedRelation = ref(null)
 const relationForm = ref({
   id: null, from_character_id: null, to_character_id: null,
   relation_type: '', faction: '', interest_link: '', emotion_link: '', description: ''
 })
 
 const relationTypes = [
-  '同盟', '敌对', '恋人', '亲属', '上下级', '师徒', '挚友', '竞争', '利用', '其他'
+  '同盟', '敌对', '恋人', '暗恋', '虐恋', '亲属', '上下级', '师徒', '挚友', '竞争', '利用', '监视', '宿命', '对照', '其他'
 ].map(v => ({ label: v, value: v }))
+
+const typeVariant = { '同盟': 'info', '敌对': 'danger', '恋人': 'purple', '暗恋': 'purple', '虐恋': 'danger', '亲属': 'default', '挚友': 'success', '竞争': 'warning', '利用': 'warning', '监视': 'danger' }
 
 async function loadData() {
   await Promise.all([store.fetchCharacters(pid), store.fetchRelations(pid)])
@@ -43,6 +47,7 @@ onMounted(loadData)
 watch([() => store.characters, () => store.relations], () => nextTick(layout), { deep: true })
 
 function characterOptions() { return store.characters.map(c => ({ label: c.name, value: c.id })) }
+function charName(id) { return store.characters.find(c => c.id === id)?.name || '?' }
 
 function openAddRelation() {
   relationForm.value = { id: null, from_character_id: null, to_character_id: null, relation_type: '', faction: '', interest_link: '', emotion_link: '', description: '' }
@@ -82,13 +87,13 @@ const roleColorMap = { male_lead: '#0070f3', female_lead: '#8b5cf6', supporting:
 
 <template>
   <div>
-    <div class="graph-header">
-      <h3 class="section-title" style="margin:0">人物关系图</h3>
-      <div class="flex gap-2">
+    <div class="section-header">
+      <h3 class="section-title">人物关系图</h3>
+      <div class="section-header__actions">
         <VButton variant="ghost" size="sm" @click="showRegenInput = !showRegenInput" :loading="regenerating">
           AI 重新生成
         </VButton>
-        <VButton variant="primary" size="sm" @click="openAddRelation">添加关系</VButton>
+        <VButton variant="secondary" size="sm" @click="openAddRelation">添加关系</VButton>
       </div>
     </div>
 
@@ -97,7 +102,8 @@ const roleColorMap = { male_lead: '#0070f3', female_lead: '#8b5cf6', supporting:
       <VButton variant="primary" size="sm" :loading="regenerating" @click="handleRegen">生成</VButton>
     </div>
 
-    <VCard v-if="graphData.nodes.length" padding="sm">
+    <!-- Graph -->
+    <VCard v-if="graphData.nodes.length" padding="sm" class="graph-card">
       <svg class="relation-svg" :viewBox="viewBox" preserveAspectRatio="xMidYMid meet">
         <defs>
           <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
@@ -114,18 +120,55 @@ const roleColorMap = { male_lead: '#0070f3', female_lead: '#8b5cf6', supporting:
         </g>
       </svg>
     </VCard>
-    <p v-else class="empty-text">AI 尚未生成角色关系，或手动添加</p>
 
+    <!-- Relation detail list -->
     <div v-if="store.relations.length" class="relation-list">
-      <h3 class="section-title">关系列表</h3>
-      <VCard v-for="r in store.relations" :key="r.id" padding="sm">
-        <div class="relation-item">
-          <span class="relation-item__names">{{ store.characters.find(c => c.id === r.from_character_id)?.name || '?' }} → {{ store.characters.find(c => c.id === r.to_character_id)?.name || '?' }}</span>
-          <span class="relation-item__type">{{ r.relation_type }}</span>
-          <button class="relation-item__del" @click="deleteRelation(r.id)">删除</button>
+      <div class="relation-list__title">关系详情 · {{ store.relations.length }} 条</div>
+      <VCard v-for="r in store.relations" :key="r.id" padding="sm" class="relation-card">
+        <div class="rel-row" @click="expandedRelation = expandedRelation === r.id ? null : r.id">
+          <div class="rel-row__main">
+            <span class="rel-row__from">{{ charName(r.from_character_id) }}</span>
+            <svg width="20" height="12" viewBox="0 0 20 12" fill="none" class="rel-row__arrow">
+              <path d="M0 6h16M13 2l4 4-4 4" stroke="var(--text-tertiary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="rel-row__to">{{ charName(r.to_character_id) }}</span>
+            <VBadge :variant="typeVariant[r.relation_type] || 'default'">{{ r.relation_type }}</VBadge>
+            <VBadge v-if="r.faction" variant="default">{{ r.faction }}</VBadge>
+          </div>
+          <button class="rel-row__del" @click.stop="deleteRelation(r.id)">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8" stroke-linecap="round"/></svg>
+          </button>
         </div>
+        <Transition name="slide-up">
+          <div v-if="expandedRelation === r.id" class="rel-detail">
+            <div v-if="r.interest_link" class="rel-detail__row">
+              <label>利益链</label>
+              <p>{{ r.interest_link }}</p>
+            </div>
+            <div v-if="r.emotion_link" class="rel-detail__row">
+              <label>情感链</label>
+              <p>{{ r.emotion_link }}</p>
+            </div>
+            <div v-if="r.description" class="rel-detail__row">
+              <label>关系动态</label>
+              <p>{{ r.description }}</p>
+            </div>
+          </div>
+        </Transition>
       </VCard>
     </div>
+
+    <p v-else-if="!graphData.nodes.length" class="empty-state">
+      <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+        <circle cx="12" cy="16" r="6" stroke="var(--text-tertiary)" stroke-width="1.5" fill="none"/>
+        <circle cx="28" cy="16" r="6" stroke="var(--text-tertiary)" stroke-width="1.5" fill="none"/>
+        <circle cx="20" cy="30" r="6" stroke="var(--text-tertiary)" stroke-width="1.5" fill="none"/>
+        <line x1="17" y1="18" x2="23" y2="18" stroke="var(--text-tertiary)" stroke-width="1" stroke-dasharray="2 2"/>
+        <line x1="14" y1="21" x2="18" y2="25" stroke="var(--text-tertiary)" stroke-width="1" stroke-dasharray="2 2"/>
+        <line x1="26" y1="21" x2="22" y2="25" stroke="var(--text-tertiary)" stroke-width="1" stroke-dasharray="2 2"/>
+      </svg>
+      <span>AI 尚未生成角色关系</span>
+    </p>
 
     <VModal v-model="showAddRelation" title="添加关系" width="480px">
       <div class="form-grid">
@@ -133,8 +176,9 @@ const roleColorMap = { male_lead: '#0070f3', female_lead: '#8b5cf6', supporting:
         <VSelect v-model="relationForm.to_character_id" label="角色 B" :options="characterOptions()" />
         <VSelect v-model="relationForm.relation_type" label="关系类型" :options="relationTypes" />
         <VInput v-model="relationForm.faction" label="阵营" placeholder="所属阵营" />
-        <VTextarea v-model="relationForm.interest_link" label="利益链" :rows="2" />
-        <VTextarea v-model="relationForm.emotion_link" label="情感链" :rows="2" />
+        <VTextarea v-model="relationForm.interest_link" label="利益链" placeholder="两人之间的利益纠葛..." :rows="2" />
+        <VTextarea v-model="relationForm.emotion_link" label="情感链" placeholder="两人之间的情感关系..." :rows="2" />
+        <VTextarea v-model="relationForm.description" label="关系描述" placeholder="补充描述..." :rows="2" />
       </div>
       <template #footer>
         <VButton variant="secondary" @click="showAddRelation = false">取消</VButton>
@@ -145,16 +189,131 @@ const roleColorMap = { male_lead: '#0070f3', female_lead: '#8b5cf6', supporting:
 </template>
 
 <style scoped>
-.graph-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-4); }
-.regen-bar { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); padding-bottom: var(--space-4); border-bottom: 1px solid var(--border-default); }
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.section-title {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.section-header__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.regen-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border-default);
+}
+
 .regen-bar .v-input { flex: 1; }
+
+.graph-card {
+  margin-bottom: 24px;
+}
+
 .relation-svg { width: 100%; min-height: 350px; max-height: 500px; }
-.relation-list { margin-top: var(--space-6); display: flex; flex-direction: column; gap: var(--space-2); }
-.relation-item { display: flex; align-items: center; gap: var(--space-3); }
-.relation-item__names { font-size: 14px; font-weight: 500; flex: 1; }
-.relation-item__type { font-size: 13px; color: var(--text-secondary); }
-.relation-item__del { font-size: 12px; color: var(--accent-red); opacity: 0.6; }
-.relation-item__del:hover { opacity: 1; }
-.form-grid { display: flex; flex-direction: column; gap: var(--space-4); }
-.empty-text { color: var(--text-tertiary); text-align: center; padding: var(--space-8); }
+
+.relation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.relation-list__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.relation-card {
+  transition: border-color 0.15s;
+}
+
+.rel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.rel-row__main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rel-row__from, .rel-row__to {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.rel-row__arrow {
+  flex-shrink: 0;
+}
+
+.rel-row__del {
+  color: var(--text-tertiary);
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  transition: all 0.15s;
+}
+
+.relation-card:hover .rel-row__del { opacity: 1; }
+.rel-row__del:hover { color: var(--accent-red); background: var(--bg-hover); }
+
+.rel-detail {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-default);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rel-detail__row label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.rel-detail__row p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 48px 0;
+  color: var(--text-tertiary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.form-grid { display: flex; flex-direction: column; gap: 16px; }
 </style>

@@ -2,22 +2,24 @@
 import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useProjectStore } from '../stores/project'
-import { useNovelStore } from '../stores/novel'
 import { useToast } from '../composables/useToast'
 import { aiApi } from '../api/ai'
 import VTabs from '../components/ui/VTabs.vue'
 import VLoading from '../components/ui/VLoading.vue'
 import VButton from '../components/ui/VButton.vue'
-import VCard from '../components/ui/VCard.vue'
 import VTextarea from '../components/ui/VTextarea.vue'
+import GenerationProgress from '../components/GenerationProgress.vue'
 
 const route = useRoute()
 const router = useRouter()
 const projectStore = useProjectStore()
-const novelStore = useNovelStore()
 const toast = useToast()
 
-const generationStatus = ref('idle')
+const genStatus = ref('idle')
+const genStep = ref(null)
+const completedSteps = ref([])
+const allSteps = ref([])
+const stepLabels = ref({})
 const pollTimer = ref(null)
 const showRegenModal = ref(false)
 const regenPrompt = ref('')
@@ -43,12 +45,19 @@ function switchTab(val) {
   router.push(`/projects/${route.params.id}/${val}`)
 }
 
-const isGenerating = computed(() => generationStatus.value === 'generating')
+const isGenerating = computed(() => genStatus.value === 'generating')
+const isFailed = computed(() => genStatus.value === 'failed')
+const isCompleted = computed(() => genStatus.value === 'completed')
+const showProgress = computed(() => genStatus.value !== 'idle')
 
 async function checkStatus() {
   try {
     const res = await aiApi.getGenerationStatus(route.params.id)
-    generationStatus.value = res.status
+    genStatus.value = res.status
+    genStep.value = res.currentStep
+    completedSteps.value = res.completedSteps || []
+    allSteps.value = res.steps || []
+    stepLabels.value = res.stepLabels || {}
 
     if (res.status === 'completed') {
       stopPolling()
@@ -57,14 +66,13 @@ async function checkStatus() {
     } else if (res.status === 'failed') {
       stopPolling()
       await projectStore.fetchProject(route.params.id)
-      toast.error('AI 生成失败，请检查 AI 配置后重试')
     }
   } catch { /* ignore */ }
 }
 
 function startPolling() {
   stopPolling()
-  pollTimer.value = setInterval(checkStatus, 3000)
+  pollTimer.value = setInterval(checkStatus, 2500)
 }
 
 function stopPolling() {
@@ -74,21 +82,32 @@ function stopPolling() {
   }
 }
 
+async function handleContinue() {
+  try {
+    await aiApi.continueGeneration(route.params.id)
+    genStatus.value = 'generating'
+    startPolling()
+    toast.info('正在从断点继续生成...')
+  } catch (err) {
+    toast.error(err?.error || '继续生成失败，请检查 AI 配置')
+  }
+}
+
 async function regenerateAll() {
   if (!regenPrompt.value.trim()) {
-    toast.warning('请输入新的创作指令')
+    toast.warning('请输入创作指令')
     return
   }
   regenerating.value = true
   try {
     await aiApi.generateAll(route.params.id, regenPrompt.value.trim())
-    generationStatus.value = 'generating'
+    genStatus.value = 'generating'
     showRegenModal.value = false
     regenPrompt.value = ''
     startPolling()
     toast.info('AI 正在重新生成全部物料...')
   } catch (err) {
-    toast.error(err.error || '启动失败')
+    toast.error(err?.error || '启动失败')
   } finally {
     regenerating.value = false
   }
@@ -96,11 +115,9 @@ async function regenerateAll() {
 
 onMounted(async () => {
   await projectStore.fetchProject(route.params.id)
-  if (projectStore.currentProject) {
-    generationStatus.value = projectStore.currentProject.generation_status || 'idle'
-    if (generationStatus.value === 'generating') {
-      startPolling()
-    }
+  await checkStatus()
+  if (genStatus.value === 'generating') {
+    startPolling()
   }
 })
 
@@ -110,11 +127,8 @@ watch(() => route.params.id, async (id) => {
   if (id) {
     stopPolling()
     await projectStore.fetchProject(id)
-    novelStore.clearAll()
-    if (projectStore.currentProject) {
-      generationStatus.value = projectStore.currentProject.generation_status || 'idle'
-      if (generationStatus.value === 'generating') startPolling()
-    }
+    await checkStatus()
+    if (genStatus.value === 'generating') startPolling()
   }
 })
 </script>
@@ -123,34 +137,43 @@ watch(() => route.params.id, async (id) => {
   <div class="page-container">
     <VLoading v-if="projectStore.loading && !projectStore.currentProject" text="加载项目..." />
     <template v-else-if="projectStore.currentProject">
-      <div class="project-header">
-        <div class="project-header__left">
+      <!-- Header -->
+      <div class="detail-header">
+        <div class="detail-header__left">
           <button class="back-btn" @click="router.push('/projects')">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M10 3L5 8l5 5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            返回
           </button>
-          <h1 class="page-title" style="margin-bottom:0">{{ projectStore.currentProject.name }}</h1>
+          <div class="detail-header__info">
+            <h1 class="detail-header__name">{{ projectStore.currentProject.name }}</h1>
+            <p v-if="projectStore.currentProject.initial_prompt" class="detail-header__prompt">
+              {{ projectStore.currentProject.initial_prompt }}
+            </p>
+          </div>
         </div>
         <VButton variant="secondary" size="sm" @click="showRegenModal = true" :disabled="isGenerating">
           全部重新生成
         </VButton>
       </div>
 
-      <!-- Generation status banner -->
-      <div v-if="isGenerating" class="gen-banner">
-        <div class="gen-banner__spinner" />
-        <span>AI 正在生成物料，请稍候...</span>
-      </div>
-      <div v-else-if="generationStatus === 'failed'" class="gen-banner gen-banner--error">
-        <span>生成失败，请检查 AI 配置后点击"全部重新生成"重试</span>
-      </div>
+      <!-- Generation Progress -->
+      <GenerationProgress
+        v-if="showProgress"
+        :status="genStatus"
+        :current-step="genStep"
+        :completed-steps="completedSteps"
+        :steps="allSteps"
+        :step-labels="stepLabels"
+        @continue="handleContinue"
+        @regenerate="showRegenModal = true"
+      />
 
+      <!-- Tabs & Content -->
       <VTabs :tabs="tabs" :model-value="currentTab" @update:model-value="switchTab" />
 
       <div class="project-content">
-        <router-view :generation-status="generationStatus" />
+        <router-view :generation-status="genStatus" />
       </div>
 
       <!-- Regen modal -->
@@ -159,7 +182,7 @@ watch(() => route.params.id, async (id) => {
           <div v-if="showRegenModal" class="modal-overlay" @click.self="showRegenModal = false">
             <div class="modal-box">
               <h3 class="modal-title">全部重新生成</h3>
-              <p class="modal-desc">输入新的创作指令，AI 将基于当前物料重新生成全部 7 大类内容</p>
+              <p class="modal-desc">输入新的创作指令，AI 将分步重新生成全部 7 大类内容，每步完成即可查看</p>
               <VTextarea
                 v-model="regenPrompt"
                 placeholder="例如：调整风格为更暗黑的基调，增加一个双面间谍角色..."
@@ -178,27 +201,33 @@ watch(() => route.params.id, async (id) => {
 </template>
 
 <style scoped>
-.project-header {
+.detail-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: var(--space-5);
+  margin-bottom: 24px;
+  gap: 16px;
 }
 
-.project-header__left {
+.detail-header__left {
   display: flex;
-  align-items: center;
-  gap: var(--space-4);
+  align-items: flex-start;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
 }
 
 .back-btn {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
+  justify-content: center;
+  width: 36px;
+  height: 36px;
   color: var(--text-secondary);
-  font-size: 13px;
-  padding: 4px 8px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+  margin-top: 2px;
+  transition: all 0.15s;
 }
 
 .back-btn:hover {
@@ -206,41 +235,30 @@ watch(() => route.params.id, async (id) => {
   background: var(--bg-hover);
 }
 
-.project-content {
-  padding-top: var(--space-6);
+.detail-header__info {
+  min-width: 0;
 }
 
-.gen-banner {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  background: rgba(0, 112, 243, 0.1);
-  border: 1px solid rgba(0, 112, 243, 0.2);
-  border-radius: var(--radius-md);
-  margin-bottom: var(--space-4);
+.detail-header__name {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  margin-bottom: 4px;
+}
+
+.detail-header__prompt {
   font-size: 13px;
-  color: var(--accent-blue);
+  color: var(--text-tertiary);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-.gen-banner--error {
-  background: rgba(238, 68, 68, 0.1);
-  border-color: rgba(238, 68, 68, 0.2);
-  color: var(--accent-red);
-}
-
-.gen-banner__spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid transparent;
-  border-top-color: var(--accent-blue);
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-  flex-shrink: 0;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
+.project-content {
+  padding-top: 24px;
 }
 
 .modal-overlay {
@@ -251,7 +269,7 @@ watch(() => route.params.id, async (id) => {
   align-items: center;
   justify-content: center;
   z-index: var(--z-modal);
-  padding: var(--space-6);
+  padding: 24px;
 }
 
 .modal-box {
@@ -260,10 +278,10 @@ watch(() => route.params.id, async (id) => {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  padding: var(--space-6);
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: 16px;
 }
 
 .modal-title {
@@ -274,11 +292,12 @@ watch(() => route.params.id, async (id) => {
 .modal-desc {
   font-size: 13px;
   color: var(--text-secondary);
+  line-height: 1.5;
 }
 
 .modal-footer {
   display: flex;
   justify-content: flex-end;
-  gap: var(--space-3);
+  gap: 12px;
 }
 </style>
