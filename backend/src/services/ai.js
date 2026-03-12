@@ -373,3 +373,107 @@ JSON 结构如下:
 export function buildSectionGenerationPrompt(section, existingMaterial) {
   return buildStepPrompt(section, '', existingMaterial)
 }
+
+// ---------- Chapter generation prompts ----------
+
+export function buildChapterOutlinesPrompt(volume, material) {
+  const parts = []
+  if (material.basic_info) {
+    const bi = material.basic_info
+    parts.push(`【书名】${bi.book_name || ''}  【类型】${bi.genre || ''}  【风格】${bi.style || ''}`)
+  }
+  if (material.world_building) {
+    const wb = material.world_building
+    parts.push(`【世界观】${(wb.era_setting || '').slice(0, 200)}`)
+  }
+  if (material.characters?.length) {
+    parts.push(`【角色】${material.characters.map(c => `${c.name}(${c.role_type}): ${(c.description || '').slice(0, 60)}`).join(' | ')}`)
+  }
+  if (material.plot_control) {
+    parts.push(`【主线】${(material.plot_control.main_storyline || '').slice(0, 300)}`)
+  }
+  if (material.writing_style) {
+    const ws = material.writing_style
+    parts.push(`【文风】${(ws.writing_style || '').slice(0, 150)}`)
+    if (ws.rhythm_requirement) parts.push(`【节奏】${ws.rhythm_requirement.slice(0, 100)}`)
+  }
+
+  return `你是一位精通网文结构的章节策划师。请为指定卷生成详细的章节大纲。
+
+${JSON_RULE}
+
+${parts.join('\n')}
+
+【当前卷信息】
+卷号: 第${volume.volume_number}卷
+标题: ${volume.title || ''}
+目标: ${volume.goal || ''}
+概要: ${volume.summary || ''}
+
+JSON 结构：
+{
+  "chapters": [
+    {
+      "chapter_number": 1,
+      "title": "章节标题（要有悬念感，暗示本章核心冲突）",
+      "outline": "章节大纲（80-150字，包括：本章核心事件、出场角色、情感起伏、章末钩子）",
+      "key_scenes": "关键场景（简述1-2个本章的高光场面）",
+      "word_target": 3000
+    }
+  ]
+}
+
+要求：
+1. 每卷 8-15 章，每章约 3000 字
+2. 第一章开头必须有强冲突快速抓住读者
+3. 每章末尾必须有钩子引导读者继续
+4. 章节间要有节奏变化：紧张→舒缓→高潮交替
+5. 关键转折章要有铺垫章做准备
+6. 章节标题要有吸引力，不能是"第X章"这种流水账`
+}
+
+export function buildChapterContentPrompt(chapter, volume, material) {
+  const parts = []
+  if (material.basic_info) {
+    parts.push(`【书名】${material.basic_info.book_name || ''} 【类型】${material.basic_info.genre || ''}`)
+  }
+  if (material.world_building) {
+    parts.push(`【世界观】${(material.world_building.era_setting || '').slice(0, 150)}`)
+  }
+  if (material.characters?.length) {
+    parts.push(`【角色】${material.characters.map(c => `${c.name}(${c.role_type})`).join('、')}`)
+  }
+  if (material.writing_style) {
+    const ws = material.writing_style
+    parts.push(`【文风要求】${(ws.writing_style || '').slice(0, 200)}`)
+  }
+
+  return `你是一位专业的网文作家。请根据章节大纲写出完整的章节正文。
+
+${parts.join('\n')}
+
+【卷信息】第${volume.volume_number}卷: ${volume.title || ''}
+
+【本章信息】
+第${chapter.chapter_number}章: ${chapter.title || ''}
+大纲: ${chapter.outline || chapter.content || ''}
+关键场景: ${chapter.key_scenes || ''}
+目标字数: ${chapter.word_target || 3000}字
+
+${JSON_RULE}
+
+JSON 结构：
+{
+  "title": "最终章节标题",
+  "content": "章节正文全文（至少2500字，使用\\n分段）"
+}
+
+写作要求：
+1. 严格按照大纲展开，不要偏离主要事件
+2. 开头要迅速进入场景，不要啰嗦的铺垫
+3. 对话要符合角色性格，有辨识度
+4. 描写要有画面感，五感结合
+5. 章末要有悬念或情感冲击，让读者想继续
+6. 段落长度适中，适合手机阅读
+7. 正文内容直接输出，不要加章节号标题前缀`
+}

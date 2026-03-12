@@ -35,9 +35,9 @@ const tabs = [
   { label: '角色设定', value: 'characters' },
   { label: '人物关系', value: 'relations' },
   { label: '剧情总控', value: 'plot' },
-  { label: '章节管理', value: 'chapters' },
   { label: '风格控制', value: 'style' },
-  { label: 'AI 任务', value: 'ai-tasks' }
+  { label: '章节管理', value: 'chapters' },
+  { label: '预览', value: 'preview' }
 ]
 
 const currentTab = computed(() => {

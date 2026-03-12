@@ -8,5 +8,8 @@ export const aiApi = {
   getTasks: (pid) => client.get(`/projects/${pid}/ai-tasks`),
   getTask: (pid, tid) => client.get(`/projects/${pid}/ai-tasks/${tid}`),
   compileMaterial: (pid) => client.post(`/projects/${pid}/material/compile`),
-  getMaterial: (pid) => client.get(`/projects/${pid}/material`)
+  getMaterial: (pid) => client.get(`/projects/${pid}/material`),
+  generateVolumeChapters: (pid, volumeId, prompt) => client.post(`/projects/${pid}/generate-volume-chapters`, { volume_id: volumeId, prompt }),
+  generateChapterContent: (pid, chapterId) => client.post(`/projects/${pid}/generate-chapter-content`, { chapter_id: chapterId }),
+  getPreview: (pid) => client.get(`/projects/${pid}/preview`)
 }

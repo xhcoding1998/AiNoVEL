@@ -63,19 +63,19 @@ const routes = [
             component: () => import('../components/novel/PlotControl.vue')
           },
           {
-            path: 'chapters',
-            name: 'Chapters',
-            component: () => import('../components/novel/ChapterEditor.vue')
-          },
-          {
             path: 'style',
             name: 'StyleControl',
             component: () => import('../components/novel/StyleControl.vue')
           },
           {
-            path: 'ai-tasks',
-            name: 'AITasks',
-            component: () => import('../views/AITasks.vue')
+            path: 'chapters',
+            name: 'Chapters',
+            component: () => import('../components/novel/ChapterEditor.vue')
+          },
+          {
+            path: 'preview',
+            name: 'NovelPreview',
+            component: () => import('../components/novel/NovelPreview.vue')
           }
         ]
       },

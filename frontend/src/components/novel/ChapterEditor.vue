@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { useNovelStore } from '../../stores/novel'
 import { useToast } from '../../composables/useToast'
 import { useAIRegenerate } from '../../composables/useAIRegenerate'
+import { aiApi } from '../../api/ai'
 import VButton from '../ui/VButton.vue'
 import VCard from '../ui/VCard.vue'
 import VInput from '../ui/VInput.vue'
@@ -23,6 +24,8 @@ watch(dataVersion, () => loadData())
 const showEditor = ref(false)
 const saving = ref(false)
 const selectedVolume = ref(null)
+const generatingChapters = ref(false)
+const generatingContent = ref(null)
 
 const chapterForm = ref({ id: null, volume_id: null, chapter_number: 1, title: '', content: '', status: 'draft' })
 
@@ -39,8 +42,8 @@ const currentVolume = computed(() => {
 async function loadData() {
   await store.fetchVolumes(pid)
   if (store.volumes.length) {
-    selectedVolume.value = store.volumes[0].id
-    await store.fetchChapters(pid, store.volumes[0].id)
+    if (!selectedVolume.value) selectedVolume.value = store.volumes[0].id
+    await store.fetchChapters(pid, selectedVolume.value)
   }
 }
 
@@ -65,9 +68,86 @@ async function saveChapter() {
   finally { saving.value = false }
 }
 
+async function deleteChapter(ch) {
+  if (!confirm(`确定删除「${ch.title || '第' + ch.chapter_number + '章'}」？`)) return
+  try {
+    const { novelApi } = await import('../../api/novel')
+    // Use the chapters endpoint if available, otherwise manual
+    await novelApi.saveChapter(pid, { ...ch, _delete: true })
+    toast.success('已删除')
+    await store.fetchChapters(pid, selectedVolume.value)
+  } catch {
+    toast.error('删除失败')
+  }
+}
+
 async function handleRegen() {
   await regenerateSection(pid, 'volumes', loadData)
 }
+
+async function generateChaptersForVolume() {
+  if (!selectedVolume.value) return
+  generatingChapters.value = true
+  try {
+    const task = await aiApi.generateVolumeChapters(pid, selectedVolume.value, regenPrompt.value.trim() || undefined)
+    toast.success('AI 正在生成章节大纲...')
+
+    for (let i = 0; i < 60; i++) {
+      await new Promise(r => setTimeout(r, 2500))
+      const res = await aiApi.getTask(pid, task.data.id)
+      if (res.data.status === 'completed') {
+        toast.success('章节大纲生成完成')
+        await store.fetchChapters(pid, selectedVolume.value)
+        return
+      }
+      if (res.data.status === 'failed') {
+        toast.error('生成失败: ' + (res.data.result || '未知错误'))
+        return
+      }
+    }
+    toast.warning('生成超时，请刷新查看')
+  } catch (err) {
+    toast.error(err?.error || '生成失败')
+  } finally {
+    generatingChapters.value = false
+  }
+}
+
+async function generateContent(ch) {
+  generatingContent.value = ch.id
+  try {
+    const task = await aiApi.generateChapterContent(pid, ch.id)
+    toast.success(`正在生成「${ch.title}」正文...`)
+
+    for (let i = 0; i < 120; i++) {
+      await new Promise(r => setTimeout(r, 3000))
+      const res = await aiApi.getTask(pid, task.data.id)
+      if (res.data.status === 'completed') {
+        toast.success('正文生成完成')
+        await store.fetchChapters(pid, selectedVolume.value)
+        return
+      }
+      if (res.data.status === 'failed') {
+        toast.error('生成失败: ' + (res.data.result || '未知错误'))
+        return
+      }
+    }
+    toast.warning('生成超时')
+  } catch (err) {
+    toast.error(err?.error || '生成失败')
+  } finally {
+    generatingContent.value = null
+  }
+}
+
+function isOutlineOnly(ch) {
+  if (!ch.content) return true
+  return ch.content.length < 500 && ch.status === 'draft'
+}
+
+const totalWords = computed(() => {
+  return store.chapters.reduce((sum, ch) => sum + (ch.word_count || 0), 0)
+})
 </script>
 
 <template>
@@ -99,7 +179,7 @@ async function handleRegen() {
         <line x1="12" y1="18" x2="24" y2="18" stroke="var(--text-tertiary)" stroke-width="1.5" stroke-linecap="round"/>
         <line x1="12" y1="24" x2="20" y2="24" stroke="var(--text-tertiary)" stroke-width="1.5" stroke-linecap="round"/>
       </svg>
-      <span>AI 尚未生成分卷大纲</span>
+      <span>AI 尚未生成分卷大纲，请先在「剧情总控」生成分卷</span>
     </p>
 
     <template v-else>
@@ -119,6 +199,17 @@ async function handleRegen() {
       <VCard v-if="currentVolume" class="vol-detail">
         <div class="vol-detail__head">
           <h4 class="vol-detail__title">{{ currentVolume.title }}</h4>
+          <VButton
+            variant="primary"
+            size="sm"
+            :loading="generatingChapters"
+            @click="generateChaptersForVolume"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M7 2l1 2.5 2.5.5-2 2 .5 2.5L7 8.5 4.5 9.5l.5-2.5-2-2L5.5 4.5z" stroke-linejoin="round"/>
+            </svg>
+            AI 生成本卷章节
+          </VButton>
         </div>
         <div v-if="currentVolume.goal" class="vol-detail__section">
           <label class="vol-detail__label">本卷目标</label>
@@ -131,31 +222,53 @@ async function handleRegen() {
       </VCard>
 
       <div v-if="store.chapters.length" class="chapter-list">
-        <div class="chapter-list__title">章节列表</div>
+        <div class="chapter-list__header">
+          <span class="chapter-list__title">章节列表 · {{ store.chapters.length }} 章</span>
+          <span class="chapter-list__words">{{ totalWords.toLocaleString() }} 字</span>
+        </div>
         <VCard v-for="ch in store.chapters" :key="ch.id" padding="sm" hoverable>
-          <div class="chapter-item" @click="openEdit(ch)">
-            <div class="chapter-item__head">
+          <div class="chapter-item">
+            <div class="chapter-item__head" @click="openEdit(ch)">
               <span class="chapter-item__num">第{{ ch.chapter_number }}章</span>
               <span class="chapter-item__title">{{ ch.title || '无标题' }}</span>
               <VBadge :variant="statusVariantMap[ch.status] || 'default'">
                 {{ statusOptions.find(s => s.value === ch.status)?.label || ch.status }}
               </VBadge>
             </div>
-            <div v-if="ch.word_count" class="chapter-item__meta">{{ ch.word_count }} 字</div>
+            <div class="chapter-item__bottom">
+              <span v-if="ch.word_count" class="chapter-item__meta">{{ ch.word_count.toLocaleString() }} 字</span>
+              <div class="chapter-item__actions">
+                <VButton
+                  v-if="isOutlineOnly(ch)"
+                  variant="ghost"
+                  size="sm"
+                  :loading="generatingContent === ch.id"
+                  :disabled="generatingContent !== null && generatingContent !== ch.id"
+                  @click.stop="generateContent(ch)"
+                >
+                  AI 写正文
+                </VButton>
+                <button class="chapter-item__edit" @click="openEdit(ch)">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3">
+                    <path d="M8.5 2.5l3 3M2 9l6-6 3 3-6 6H2V9z" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
           </div>
         </VCard>
       </div>
-      <p v-else class="empty-hint">本卷暂无章节，点击"添加章节"开始写作</p>
+      <p v-else class="empty-hint">本卷暂无章节，点击「AI 生成本卷章节」自动创建章节大纲</p>
     </template>
 
-    <VModal v-model="showEditor" :title="chapterForm.id ? '编辑章节' : '添加章节'" width="720px">
+    <VModal v-model="showEditor" :title="chapterForm.id ? '编辑章节' : '添加章节'" width="780px">
       <div class="form-grid">
         <div class="form-row">
           <VInput v-model.number="chapterForm.chapter_number" label="章节号" type="number" />
           <VInput v-model="chapterForm.title" label="章节标题" placeholder="章节标题" />
         </div>
         <VSelect v-model="chapterForm.status" label="状态" :options="statusOptions" />
-        <VTextarea v-model="chapterForm.content" label="章节内容" placeholder="在此编写章节内容..." :rows="12" />
+        <VTextarea v-model="chapterForm.content" label="章节内容" placeholder="在此编写章节内容..." :rows="16" :maxHeight="600" />
       </div>
       <template #footer>
         <VButton variant="secondary" @click="showEditor = false">取消</VButton>
@@ -186,7 +299,6 @@ async function handleRegen() {
 }
 
 .section-title {
-  font-family: var(--font-display);
   font-size: 17px;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -275,11 +387,14 @@ async function handleRegen() {
 }
 
 .vol-detail__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 16px;
 }
 
 .vol-detail__title {
-  font-family: var(--font-display);
   font-size: 15px;
   font-weight: 600;
   line-height: 1.4;
@@ -308,7 +423,7 @@ async function handleRegen() {
 
 .vol-detail__text--summary {
   white-space: pre-wrap;
-  max-height: 300px;
+  max-height: 200px;
   overflow-y: auto;
 }
 
@@ -318,20 +433,69 @@ async function handleRegen() {
   gap: 8px;
 }
 
+.chapter-list__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
 .chapter-list__title {
   font-size: 12px;
   font-weight: 600;
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  margin-bottom: 4px;
+}
+
+.chapter-list__words {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
 }
 
 .chapter-item { cursor: pointer; }
-.chapter-item__head { display: flex; align-items: center; gap: 8px; }
-.chapter-item__num { font-weight: 600; font-size: 13px; color: var(--text-tertiary); }
-.chapter-item__title { font-weight: 500; font-size: 14px; flex: 1; }
-.chapter-item__meta { font-size: 12px; color: var(--text-tertiary); margin-top: 4px; }
+
+.chapter-item__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chapter-item__num { font-weight: 600; font-size: 13px; color: var(--text-tertiary); flex-shrink: 0; }
+.chapter-item__title { font-weight: 500; font-size: 14px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.chapter-item__bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+}
+
+.chapter-item__meta { font-size: 12px; color: var(--text-tertiary); font-family: var(--font-mono); }
+
+.chapter-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.chapter-item:hover .chapter-item__actions { opacity: 1; }
+
+.chapter-item__edit {
+  color: var(--text-tertiary);
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.chapter-item__edit:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
 .form-grid { display: flex; flex-direction: column; gap: 16px; }
 .form-row { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; }
 
