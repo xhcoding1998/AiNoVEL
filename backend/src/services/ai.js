@@ -286,7 +286,13 @@ JSON 结构：
 1. 至少 6-10 条关系，覆盖所有主要角色
 2. 关系要有灰色地带，包含至少 1 条"表里不一"的关系
 3. 利益链和情感链要具体
-4. from_name 和 to_name 必须与角色列表中的名字完全一致${charHint}${compactContext}`
+4. from_name 和 to_name 必须与角色列表中的名字完全一致
+5. ⚠️ 关系方向非常重要——用于生成关系脉络图：
+   - 主角（male_lead/female_lead）应出现在 from_name 一侧，指向配角或反派
+   - 配角之间的关系由高地位角色指向低地位角色
+   - 反派指向被其威胁/对抗的角色
+   - 不要让所有关系都从同一个角色出发，要形成多层网络：主角层 → 配角层 → 反派层
+   - 这样生成的关系图才能形成清晰的上下层级脉络，而非一条水平线${charHint}${compactContext}`
 }
 
 function buildCompactContext(existing) {

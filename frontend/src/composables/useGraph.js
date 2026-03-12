@@ -18,12 +18,40 @@ function truncateLabel(name) {
   return name.length > MAX_LABEL_LEN ? name.slice(0, MAX_LABEL_LEN) + '…' : name
 }
 
+const ROLE_RANK = {
+  male_lead: 0,
+  female_lead: 0,
+  supporting: 1,
+  antagonist: 2
+}
+
+/**
+ * 为关系网络图构建分层提示。
+ * dagre 是 DAG 布局引擎，对网状结构容易坍塌为一行。
+ * 策略：按角色类型分层 + 引入隐形层级边辅助 dagre 分层。
+ */
+function assignRanks(chars) {
+  const groups = {}
+  for (const c of chars) {
+    const rank = ROLE_RANK[c.role_type] ?? 1
+    ;(groups[rank] ??= []).push(c)
+  }
+  return groups
+}
+
 export function useGraph(charactersFn, relationsFn) {
   const graphData = ref({ nodes: [], edges: [] })
 
   function layout() {
-    const g = new dagre.graphlib.Graph()
-    g.setGraph({ rankdir: 'TB', nodesep: 60, ranksep: 80, marginx: 40, marginy: 40 })
+    const g = new dagre.graphlib.Graph({ multigraph: true })
+    g.setGraph({
+      rankdir: 'TB',
+      nodesep: 80,
+      ranksep: 100,
+      marginx: 40,
+      marginy: 40,
+      ranker: 'network-simplex'
+    })
     g.setDefaultEdgeLabel(() => ({}))
 
     const chars = (typeof charactersFn === 'function' ? charactersFn() : unref(charactersFn)) || []
@@ -45,8 +73,26 @@ export function useGraph(charactersFn, relationsFn) {
       g.setEdge(String(r.from_character_id), String(r.to_character_id), {
         label: r.relation_type || '',
         data: r
-      })
+      }, `rel_${r.id || Math.random()}`)
     })
+
+    const rankGroups = assignRanks(chars)
+    const sortedRanks = Object.keys(rankGroups).map(Number).sort((a, b) => a - b)
+
+    if (sortedRanks.length > 1) {
+      for (let ri = 0; ri < sortedRanks.length - 1; ri++) {
+        const upperGroup = rankGroups[sortedRanks[ri]]
+        const lowerGroup = rankGroups[sortedRanks[ri + 1]]
+        if (upperGroup?.length && lowerGroup?.length) {
+          g.setEdge(
+            String(upperGroup[0].id),
+            String(lowerGroup[0].id),
+            { minlen: 2, weight: 0, label: '', _invisible: true },
+            '_rank_hint_' + ri
+          )
+        }
+      }
+    }
 
     dagre.layout(g)
 
@@ -70,6 +116,7 @@ export function useGraph(charactersFn, relationsFn) {
     const edges = []
     g.edges().forEach(e => {
       const edge = g.edge(e)
+      if (edge._invisible) return
       edges.push({
         from: e.v,
         to: e.w,

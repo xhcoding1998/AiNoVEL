@@ -54,7 +54,7 @@ defineEmits(['update:modelValue'])
   font-size: 14px;
   line-height: 1.7;
   resize: vertical;
-  min-height: 280px;
+  min-height: 240px;
   overflow-y: auto;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
