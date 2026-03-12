@@ -146,6 +146,7 @@ ai.post('/:id/regenerate-from', async (c) => {
   const userId = c.get('userId')
   const userConfig = await getUserAIConfig(userId)
 
+  await compileMaterial(pid)
   await sql`UPDATE projects SET generation_status = 'generating', updated_at = NOW() WHERE id = ${pid}`
 
   const stepsToRegen = GENERATION_STEPS.slice(startIdx).map(s => STEP_LABELS[s] || s).join('、')
@@ -192,7 +193,7 @@ ai.post('/:id/generate-single-item', async (c) => {
   if (!pid) return c.json({ error: '项目不存在' }, 404)
 
   const { item_type, context } = await c.req.json()
-  const validTypes = ['character', 'relation', 'volume']
+  const validTypes = ['character', 'relation', 'volume', 'plot_device']
   if (!validTypes.includes(item_type)) {
     return c.json({ error: '无效的生成类型' }, 400)
   }
@@ -407,8 +408,8 @@ async function processStepByStep(taskId, projectId, prompt, userConfig, startIdx
 
       let existingMaterial = {}
       try {
-        const [latest] = await sql`SELECT content FROM materials WHERE project_id = ${projectId} ORDER BY version DESC LIMIT 1`
-        if (latest) existingMaterial = latest.content
+        const compiled = await compileMaterial(projectId)
+        existingMaterial = compiled.content || {}
       } catch { /* first run, no material yet */ }
 
       const systemPrompt = buildStepPrompt(step, prompt, existingMaterial)
@@ -684,6 +685,33 @@ JSON 结构：
 1. 优先为缺少关系的角色建立联系
 2. 关系要有灰色地带，不要太简单直白
 3. from_name 和 to_name 必须与角色列表中的名字完全一致${charHint}${ctx}`
+  }
+
+  if (itemType === 'plot_device') {
+    return `你是一位精通伏笔设计的编剧顾问。请基于已有物料和用户要求，生成一个新的叙事装置（伏笔/反转/信息差）。
+
+${JSON_RULE}
+
+JSON 结构：
+{
+  "device_type": "foreshadowing / reversal / info_gap",
+  "description": "详细描述（100字以上，包括：①具体内容是什么 ②涉及哪些角色 ③如何埋设 ④预期的读者反应 ⑤回收时的效果）",
+  "setup_chapter": null,
+  "payoff_chapter": null,
+  "status": "planted"
+}
+
+device_type 说明：
+- foreshadowing（伏笔）：提前埋下线索，后续揭示时让读者恍然大悟
+- reversal（反转）：打破读者预期的剧情转折
+- info_gap（信息差）：角色之间或角色与读者之间的信息不对等
+
+要求：
+1. 必须与已有的角色和剧情紧密结合，不能凭空编造
+2. 描述要具体到可以直接写入章节
+3. 伏笔要有前后呼应的具体细节
+4. 反转要有合理的逻辑支撑，不能太突兀
+5. 信息差要说明谁知道、谁不知道、以及何时揭露${ctx}`
   }
 
   if (itemType === 'volume') {

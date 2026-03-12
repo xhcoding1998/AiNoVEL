@@ -45,6 +45,8 @@ const deviceForm = ref({ id: null, device_type: 'foreshadowing', description: ''
 
 const deviceTypes = [{ label: '伏笔', value: 'foreshadowing' }, { label: '反转', value: 'reversal' }, { label: '信息差', value: 'info_gap' }]
 const deviceStatuses = [{ label: '已埋设', value: 'planted' }, { label: '发展中', value: 'growing' }, { label: '已回收', value: 'resolved' }]
+const deviceTypeLabel = { foreshadowing: '伏笔', reversal: '反转', info_gap: '信息差' }
+const aiDeviceGenerating = ref(false)
 
 async function loadPlot() {
   await store.fetchPlotControl(pid)
@@ -125,6 +127,25 @@ async function aiGenerateVolume() {
     toast.error(err?.error || 'AI 生成失败')
   } finally {
     aiGenerating.value = false
+  }
+}
+
+async function aiGenerateDevice() {
+  aiDeviceGenerating.value = true
+  try {
+    const hint = `请生成一个${deviceTypeLabel[deviceForm.value.device_type] || '伏笔'}类型的叙事装置`
+    const res = await aiApi.generateSingleItem(pid, 'plot_device', hint)
+    const data = res.data || res
+    deviceForm.value.device_type = data.device_type || deviceForm.value.device_type
+    deviceForm.value.description = data.description || ''
+    deviceForm.value.setup_chapter = data.setup_chapter || null
+    deviceForm.value.payoff_chapter = data.payoff_chapter || null
+    deviceForm.value.status = data.status || 'planted'
+    toast.success('AI 已生成内容，请检查后保存')
+  } catch (err) {
+    toast.error(err?.error || 'AI 生成失败')
+  } finally {
+    aiDeviceGenerating.value = false
   }
 }
 
@@ -243,7 +264,7 @@ const tabs = [{ label: '故事主线', value: 'storyline' }, { label: '分卷大
     <VModal v-model="showDeviceModal" title="添加伏笔/反转">
       <div class="form-grid">
         <VSelect v-model="deviceForm.device_type" label="类型" :options="deviceTypes" />
-        <VTextarea v-model="deviceForm.description" label="描述" :rows="3" />
+        <VTextarea v-model="deviceForm.description" label="描述" placeholder="伏笔/反转/信息差的具体内容..." :rows="4" />
         <div class="form-row">
           <VInput v-model.number="deviceForm.setup_chapter" label="埋设章节" type="number" />
           <VInput v-model.number="deviceForm.payoff_chapter" label="回收章节" type="number" />
@@ -251,8 +272,18 @@ const tabs = [{ label: '故事主线', value: 'storyline' }, { label: '分卷大
         <VSelect v-model="deviceForm.status" label="状态" :options="deviceStatuses" />
       </div>
       <template #footer>
-        <VButton variant="secondary" @click="showDeviceModal = false">取消</VButton>
-        <VButton variant="primary" :loading="saving" :disabled="isGenerating" @click="saveDevice">保存</VButton>
+        <div class="modal-footer-full">
+          <VButton variant="ghost" size="sm" :loading="aiDeviceGenerating" @click="aiGenerateDevice" class="ai-fill-btn">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0">
+              <path d="M7 1v3M7 10v3M1 7h3M10 7h3M2.8 2.8l2.1 2.1M9.1 9.1l2.1 2.1M11.2 2.8l-2.1 2.1M4.9 9.1l-2.1 2.1" stroke-linecap="round"/>
+            </svg>
+            AI 智能填充
+          </VButton>
+          <div class="modal-footer-right">
+            <VButton variant="secondary" @click="showDeviceModal = false">取消</VButton>
+            <VButton variant="primary" :loading="saving" :disabled="isGenerating" @click="saveDevice">保存</VButton>
+          </div>
+        </div>
       </template>
     </VModal>
 
