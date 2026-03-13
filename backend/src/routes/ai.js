@@ -198,7 +198,7 @@ ai.post('/:id/generate-single-item', async (c) => {
   if (!pid) return c.json({ error: '项目不存在' }, 404)
 
   const { item_type, context } = await c.req.json()
-  const validTypes = ['character', 'relation', 'volume', 'plot_device']
+  const validTypes = ['character', 'relation', 'volume', 'plot_device', 'chapter']
   if (!validTypes.includes(item_type)) {
     return c.json({ error: '无效的生成类型' }, 400)
   }
@@ -749,6 +749,51 @@ JSON 结构：
 2. 角色要有独特的辨识度，名字必须是全新的
 3. 秘密和弱点要能融入已有剧情体系
 4. 新角色应与已有角色产生有趣的互动关系${charForbid}${charSummary}${ctx}`
+  }
+
+  if (itemType === 'chapter') {
+    const chapters = existingMaterial?.chapters || []
+    const chapterTitles = chapters.map(c => c.title).filter(Boolean)
+    const volSummaries = existingMaterial?.volumes || []
+
+    const chapterList = chapters.length
+      ? `\n\n【已有章节（部分）】\n${chapters.slice(0, 30).map(
+          c => `- 第${c.chapter_number}章「${c.title || '无标题'}」：${(c.outline || c.content || '').slice(0, 60)}`
+        ).join('\n')}`
+      : ''
+
+    const forbidBlock = chapterTitles.length
+      ? `\n\n⚠️⚠️⚠️ 【标题禁止重复】以下章节标题已经存在，新生成章节标题绝对不能与它们相同：\n${chapterTitles.map(t => `- ${t}`).join('\n')}`
+      : ''
+
+    const volBlock = volSummaries.length
+      ? `\n\n【分卷信息】\n${volSummaries.map(
+          v => `- 第${v.volume_number}卷「${v.title || ''}」：${(v.summary || '').slice(0, 80)}`
+        ).join('\n')}`
+      : ''
+
+    const userHint = userContext ? `\n\n【用户补充要求】\n${userContext}` : ''
+
+    return `你是一位精通网文结构的章节策划师。请基于已有物料和用户要求，设计一个新的章节大纲（单章）。
+
+${JSON_RULE}
+${volBlock}${chapterList}${forbidBlock}${userHint}${ctx}
+
+JSON 结构：
+{
+  "chapter_number": 1,
+  "title": "章节标题（要有悬念感，暗示本章核心冲突）",
+  "outline": "章节大纲（80-150字，包括：本章核心事件、出场角色、情感起伏、章末钩子）",
+  "key_scenes": "关键场景（简述1-2个本章的高光场面）",
+  "word_target": 3000
+}
+
+要求：
+1. 严格承接已有章节的剧情发展，不要出现时间线或设定冲突
+2. 新章节标题必须是全新的，不得与已有标题重复
+3. 重点突出本章的核心冲突和情绪起伏
+4. 大纲要写清楚出场主要角色及其行为动机
+5. 章末必须有一个强钩子推动读者继续阅读`
   }
 
   if (itemType === 'relation') {
