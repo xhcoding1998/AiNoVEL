@@ -32,6 +32,15 @@ const generatingChaptersTaskId = ref(null)
 const generatingContentMap = ref({})
 const pollTimers = ref({})
 
+const showVolEditor = ref(false)
+const savingVol = ref(false)
+const aiGeneratingVol = ref(false)
+const volForm = ref(emptyVolForm())
+
+function emptyVolForm() {
+  return { id: null, volume_number: (store.volumes.length || 0) + 1, title: '', goal: '', summary: '' }
+}
+
 const STORAGE_KEY = `ai_chapter_tasks_${pid}`
 
 function persistTasks() {
@@ -251,6 +260,80 @@ async function handleRegen() {
   await regenerateSection(pid, 'volumes', loadData)
 }
 
+function openCreateVol() {
+  volForm.value = emptyVolForm()
+  volForm.value.volume_number = (store.volumes.length || 0) + 1
+  showVolEditor.value = true
+}
+
+function openEditVol(vol) {
+  volForm.value = { ...vol }
+  showVolEditor.value = true
+}
+
+async function saveVol() {
+  if (!volForm.value.title.trim()) { toast.warning('请输入卷标题'); return }
+  savingVol.value = true
+  try {
+    await store.saveVolume(pid, volForm.value)
+    toast.success('已保存')
+    showVolEditor.value = false
+    await loadData()
+  } catch { toast.error('保存失败') }
+  finally { savingVol.value = false }
+}
+
+async function deleteVol(vol) {
+  if (!confirm(`确定删除「${vol.title || '第' + vol.volume_number + '卷'}」及其所有章节？`)) return
+  try {
+    await store.deleteVolume(pid, vol.id)
+    toast.success('已删除')
+    if (selectedVolume.value === vol.id) {
+      selectedVolume.value = store.volumes.length ? store.volumes[0].id : null
+    }
+    await loadData()
+  } catch { toast.error('删除失败') }
+}
+
+async function aiFillVol() {
+  aiGeneratingVol.value = true
+  try {
+    const existingVols = store.volumes
+      .filter(v => v.id !== volForm.value.id)
+      .sort((a, b) => a.volume_number - b.volume_number)
+
+    const existsTitles = existingVols.map(v => v.title).filter(Boolean)
+    const volNum = volForm.value.volume_number || (existingVols.length + 1)
+
+    const hintParts = []
+    if (existingVols.length) {
+      hintParts.push(
+        '已有分卷：' +
+        existingVols.map(v => `第${v.volume_number}卷「${v.title || '无标题'}」`).join('，')
+      )
+    }
+    if (existsTitles.length) {
+      hintParts.push(`新卷标题必须与以下标题完全不同：${existsTitles.join('、')}`)
+    }
+    hintParts.push(`请为第${volNum}卷生成分卷大纲，严格承接已有分卷的剧情发展。`)
+
+    const hint = hintParts.join('\n')
+    const res = await aiApi.generateSingleItem(pid, 'volume', hint)
+    const data = res.data || res
+
+    if (data.volume_number) volForm.value.volume_number = data.volume_number
+    if (data.title) volForm.value.title = data.title
+    if (data.goal) volForm.value.goal = data.goal
+    if (data.summary) volForm.value.summary = data.summary
+
+    toast.success('AI 已生成分卷大纲，请检查后保存')
+  } catch (err) {
+    toast.error(err?.error || 'AI 生成失败')
+  } finally {
+    aiGeneratingVol.value = false
+  }
+}
+
 function pollChapterOutlines(taskId) {
   const key = `vol_${taskId}`
   if (pollTimers.value[key]) clearInterval(pollTimers.value[key])
@@ -353,7 +436,6 @@ const totalWords = computed(() => {
         <VButton variant="ghost" size="sm" @click="showRegenInput = !showRegenInput" :loading="regenerating" :disabled="isGenerating">
           AI 重新生成卷
         </VButton>
-        <VButton variant="secondary" size="sm" @click="openCreate" :disabled="!selectedVolume">添加章节</VButton>
       </div>
     </div>
 
@@ -381,8 +463,24 @@ const totalWords = computed(() => {
           :class="{ 'vol-tab--active': selectedVolume === vol.id }"
           @click="switchVolume(vol.id)"
         >
-          <span class="vol-tab__num">第{{ vol.volume_number }}卷</span>
-          <span v-if="vol.title" class="vol-tab__title">{{ vol.title.replace(/^第[^：:]+[：:]/, '') }}</span>
+          <div class="vol-tab__main">
+            <span class="vol-tab__num">第{{ vol.volume_number }}卷</span>
+            <span v-if="vol.title" class="vol-tab__title">{{ vol.title.replace(/^第[^：:]+[：:]/, '') }}</span>
+          </div>
+          <div class="vol-tab__ops" v-if="selectedVolume === vol.id">
+            <button class="vol-tab__op" @click.stop="openEditVol(vol)" title="编辑卷">
+              <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8.5 2.5l3 3M2 9l6-6 3 3-6 6H2V9z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <button class="vol-tab__op vol-tab__op--del" @click.stop="deleteVol(vol)" title="删除卷">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+        </button>
+        <button class="vol-tab vol-tab--add" @click="openCreateVol">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M7 2v10M2 7h10" stroke-linecap="round"/>
+          </svg>
+          <span>添加卷</span>
         </button>
       </div>
 
@@ -475,6 +573,15 @@ const totalWords = computed(() => {
         </VCard>
       </div>
       <p v-else class="empty-hint">本卷暂无章节，点击「AI 生成本卷章节」自动创建章节大纲</p>
+
+      <div class="add-chapter-bar" v-if="selectedVolume">
+        <VButton variant="secondary" size="sm" @click="openCreate">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M7 2v10M2 7h10" stroke-linecap="round"/>
+          </svg>
+          添加章节
+        </VButton>
+      </div>
     </template>
 
     <VModal v-model="showEditor" :title="chapterForm.id ? '编辑章节' : '添加章节'" width="780px">
@@ -499,11 +606,43 @@ const totalWords = computed(() => {
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0">
               <path d="M7 1v3M7 10v3M1 7h3M10 7h3M2.8 2.8l2.1 2.1M9.1 9.1l2.1 2.1M11.2 2.8l-2.1 2.1M4.9 9.1l-2.1 2.1" stroke-linecap="round"/>
             </svg>
-            AI 智能填充章节
+            AI 智能填充
           </VButton>
           <div class="modal-footer-right">
             <VButton variant="secondary" @click="showEditor = false">取消</VButton>
             <VButton variant="primary" :loading="saving" :disabled="isGenerating" @click="saveChapter">保存</VButton>
+          </div>
+        </div>
+      </template>
+    </VModal>
+
+    <VModal v-model="showVolEditor" :title="volForm.id ? '编辑分卷' : '添加分卷'" width="600px">
+      <div class="form-grid">
+        <div class="form-row">
+          <VInput v-model.number="volForm.volume_number" label="卷号" type="number" />
+          <VInput v-model="volForm.title" label="卷标题" placeholder="如：第一卷：风起云涌" />
+        </div>
+        <VTextarea v-model="volForm.goal" label="本卷目标" placeholder="本卷核心目标..." :rows="3" />
+        <VTextarea v-model="volForm.summary" label="内容概要" placeholder="详细内容概要..." :rows="5" />
+      </div>
+      <template #footer>
+        <div class="modal-footer-full">
+          <VButton
+            variant="ghost"
+            size="sm"
+            :loading="aiGeneratingVol"
+            :disabled="isGenerating || aiGeneratingVol"
+            @click="aiFillVol"
+            class="ai-fill-btn"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0">
+              <path d="M7 1v3M7 10v3M1 7h3M10 7h3M2.8 2.8l2.1 2.1M9.1 9.1l2.1 2.1M11.2 2.8l-2.1 2.1M4.9 9.1l-2.1 2.1" stroke-linecap="round"/>
+            </svg>
+            AI 智能填充
+          </VButton>
+          <div class="modal-footer-right">
+            <VButton variant="secondary" @click="showVolEditor = false">取消</VButton>
+            <VButton variant="primary" :loading="savingVol" :disabled="isGenerating" @click="saveVol">保存</VButton>
           </div>
         </div>
       </template>
@@ -607,6 +746,7 @@ const totalWords = computed(() => {
   cursor: pointer;
   white-space: nowrap;
   min-width: 100px;
+  position: relative;
 }
 
 .vol-tab:hover {
@@ -616,6 +756,57 @@ const totalWords = computed(() => {
 .vol-tab--active {
   border-color: var(--border-hover);
   background: var(--bg-active);
+}
+
+.vol-tab--add {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 90px;
+  color: var(--text-tertiary);
+  border-style: dashed;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.vol-tab--add:hover {
+  color: var(--accent-blue, #0070f3);
+  border-color: var(--accent-blue, #0070f3);
+  background: var(--accent-blue-subtle, rgba(0, 112, 243, 0.04));
+}
+
+.vol-tab__main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.vol-tab__ops {
+  display: flex;
+  gap: 2px;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+
+.vol-tab__op {
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  transition: all var(--transition-fast);
+  line-height: 0;
+}
+
+.vol-tab__op:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.vol-tab__op--del:hover {
+  color: var(--accent-red, #e53e3e);
+  background: rgba(229, 62, 62, 0.08);
 }
 
 .vol-tab__num {
@@ -852,6 +1043,12 @@ const totalWords = computed(() => {
 
 .form-grid { display: flex; flex-direction: column; gap: 16px; }
 .form-row { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; }
+
+.add-chapter-bar {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 8px;
+}
 
 .empty-hint {
   color: var(--text-tertiary);

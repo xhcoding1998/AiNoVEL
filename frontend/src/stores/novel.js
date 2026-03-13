@@ -93,6 +93,11 @@ export const useNovelStore = defineStore('novel', () => {
     return res.data
   }
 
+  async function deleteVolume(projectId, volumeId) {
+    await novelApi.deleteVolume(projectId, volumeId)
+    volumes.value = volumes.value.filter(v => v.id !== volumeId)
+  }
+
   async function fetchChapters(projectId, volumeId) {
     const res = await novelApi.getChapters(projectId, volumeId)
     chapters.value = res.data
@@ -149,7 +154,7 @@ export const useNovelStore = defineStore('novel', () => {
     fetchCharacters, saveCharacter, deleteCharacter,
     fetchRelations, saveRelation, deleteRelation,
     fetchPlotControl, savePlotControl,
-    fetchVolumes, saveVolume,
+    fetchVolumes, saveVolume, deleteVolume,
     fetchChapters, saveChapter,
     fetchPlotDevices, savePlotDevice,
     fetchWritingStyle, saveWritingStyle,
