@@ -42,7 +42,7 @@ async function handleLogin() {
     <div class="auth-container">
       <div class="auth-header">
         <div class="auth-logo-icon">N</div>
-        <h1 class="auth-logo">AI Novel</h1>
+        <h1 class="auth-logo">笔来</h1>
         <p class="auth-desc">智能小说创作平台</p>
       </div>
       <form class="auth-form" @submit.prevent="handleLogin">

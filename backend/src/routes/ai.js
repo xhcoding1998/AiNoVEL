@@ -565,7 +565,18 @@ async function processChapterOutlines(taskId, projectId, volume, prompt, userCon
       if (latest) material = latest.content
     } catch { /* ignore */ }
 
-    const systemPrompt = buildChapterOutlinesPrompt(volume, material)
+    let existingChapters = []
+    try {
+      existingChapters = await sql`
+        SELECT c.chapter_number, c.title, c.content AS outline, v.volume_number
+        FROM chapters c
+        JOIN volumes v ON v.id = c.volume_id
+        WHERE c.project_id = ${projectId}
+        ORDER BY v.volume_number, c.chapter_number
+      `
+    } catch { /* ignore */ }
+
+    const systemPrompt = buildChapterOutlinesPrompt(volume, material, existingChapters)
     const userPrompt = prompt || `请为第${volume.volume_number}卷生成章节大纲`
     const chunker = createChunkLogger(projectId, taskId)
     const result = await callAI(userConfig, systemPrompt, userPrompt, {
@@ -710,6 +721,15 @@ function buildSingleItemPrompt(itemType, existingMaterial, userContext) {
     : ''
 
   if (itemType === 'character') {
+    const existingChars = existingMaterial?.characters || []
+    const charNameList = existingChars.map(c => c.name).filter(Boolean)
+    const charForbid = charNameList.length
+      ? `\n\n⚠️⚠️⚠️ 【禁止重复】以下角色名已存在，新角色的名字绝对不能与它们相同或相似：\n${charNameList.map(n => `- ${n}`).join('\n')}\n请确保生成一个全新的、独一无二的角色名！`
+      : ''
+    const charSummary = existingChars.length
+      ? `\n\n【已有角色概览】\n${existingChars.map(c => `- ${c.name}（${c.role_type}）：${(c.description || '').slice(0, 60)}`).join('\n')}`
+      : ''
+
     return `你是一位角色塑造专家。请基于已有物料和用户要求，设计一个新的角色。
 
 ${JSON_RULE}
@@ -725,9 +745,10 @@ JSON 结构：
 }
 
 要求：
-1. 与已有角色形成互补或对立，不要重复已有角色类型
-2. 角色要有独特的辨识度
-3. 秘密和弱点要能融入已有剧情体系${ctx}`
+1. 与已有角色形成互补或对立，不要重复已有角色的名字和类型
+2. 角色要有独特的辨识度，名字必须是全新的
+3. 秘密和弱点要能融入已有剧情体系
+4. 新角色应与已有角色产生有趣的互动关系${charForbid}${charSummary}${ctx}`
   }
 
   if (itemType === 'relation') {

@@ -443,7 +443,7 @@ export function buildSectionGenerationPrompt(section, existingMaterial) {
 
 // ---------- Chapter generation prompts ----------
 
-export function buildChapterOutlinesPrompt(volume, material) {
+export function buildChapterOutlinesPrompt(volume, material, existingChapters = []) {
   const parts = []
   if (material.basic_info) {
     const bi = material.basic_info
@@ -465,6 +465,29 @@ export function buildChapterOutlinesPrompt(volume, material) {
     if (ws.rhythm_requirement) parts.push(`【节奏】${ws.rhythm_requirement.slice(0, 100)}`)
   }
 
+  let existingChapterBlock = ''
+  if (existingChapters.length > 0) {
+    const grouped = {}
+    for (const ch of existingChapters) {
+      const vol = ch.volume_number || '?'
+      if (!grouped[vol]) grouped[vol] = []
+      grouped[vol].push(ch)
+    }
+    const lines = []
+    for (const [vol, chs] of Object.entries(grouped).sort((a, b) => a[0] - b[0])) {
+      lines.push(`第${vol}卷：`)
+      for (const ch of chs.sort((a, b) => a.chapter_number - b.chapter_number)) {
+        lines.push(`  第${ch.chapter_number}章「${ch.title || '无标题'}」：${(ch.outline || '').slice(0, 80)}`)
+      }
+    }
+    existingChapterBlock = `\n\n⚠️⚠️⚠️ 【已有章节 - 必须衔接】以下是已经存在的章节，新生成的章节必须：
+1. 章节标题不能与已有章节重复
+2. 剧情必须承接已有章节的发展，保持连贯性
+3. 如果是同一卷的后续章节，章节编号应接续已有章节
+
+${lines.join('\n')}`
+  }
+
   return `你是一位精通网文结构的章节策划师。请为指定卷生成详细的章节大纲。
 
 ${JSON_RULE}
@@ -475,7 +498,7 @@ ${parts.join('\n')}
 卷号: 第${volume.volume_number}卷
 标题: ${volume.title || ''}
 目标: ${volume.goal || ''}
-概要: ${volume.summary || ''}
+概要: ${volume.summary || ''}${existingChapterBlock}
 
 JSON 结构：
 {
@@ -496,7 +519,8 @@ JSON 结构：
 3. 每章末尾必须有钩子引导读者继续
 4. 章节间要有节奏变化：紧张→舒缓→高潮交替
 5. 关键转折章要有铺垫章做准备
-6. 章节标题要有吸引力，不能是"第X章"这种流水账`
+6. 章节标题要有吸引力，不能是"第X章"这种流水账
+7. 新章节必须与已有章节保持剧情连贯，不能出现矛盾或重复`
 }
 
 export function buildChapterContentPrompt(chapter, volume, material) {

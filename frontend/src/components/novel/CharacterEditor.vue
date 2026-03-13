@@ -86,9 +86,16 @@ function handleRegenClick() {
 async function aiGenerateChar() {
   aiGenerating.value = true
   try {
+    const existingNames = (store.characters || [])
+      .filter(c => c.id !== editForm.value.id)
+      .map(c => c.name)
+      .filter(Boolean)
+    const nameWarning = existingNames.length
+      ? `\n⚠️ 已有角色：${existingNames.join('、')}。新角色名字必须与以上所有角色不同！`
+      : ''
     const hint = editForm.value.name
-      ? `角色名为「${editForm.value.name}」，类型为${roleLabelMap[editForm.value.role_type] || '配角'}`
-      : `请生成一个${roleLabelMap[editForm.value.role_type] || '配角'}类型的角色`
+      ? `角色名为「${editForm.value.name}」，类型为${roleLabelMap[editForm.value.role_type] || '配角'}${nameWarning}`
+      : `请生成一个${roleLabelMap[editForm.value.role_type] || '配角'}类型的角色${nameWarning}`
     const res = await aiApi.generateSingleItem(pid, 'character', hint)
     const data = res.data || res
     editForm.value.name = data.name || editForm.value.name

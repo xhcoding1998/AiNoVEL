@@ -59,7 +59,7 @@ function handleUserMenu(item) {
             <span class="sidebar-brand__letter">N</span>
           </div>
           <div class="sidebar-brand__text">
-            <span class="sidebar-brand__name">AI Novel</span>
+            <span class="sidebar-brand__name">笔来</span>
             <span class="sidebar-brand__tag">创作平台</span>
           </div>
         </div>
