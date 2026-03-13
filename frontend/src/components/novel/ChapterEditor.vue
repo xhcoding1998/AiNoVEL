@@ -12,6 +12,7 @@ import VTextarea from '../ui/VTextarea.vue'
 import VSelect from '../ui/VSelect.vue'
 import VModal from '../ui/VModal.vue'
 import VBadge from '../ui/VBadge.vue'
+import VConfirmModal from '../ui/VConfirmModal.vue'
 
 const route = useRoute()
 const store = useNovelStore()
@@ -36,6 +37,8 @@ const showVolEditor = ref(false)
 const savingVol = ref(false)
 const aiGeneratingVol = ref(false)
 const volForm = ref(emptyVolForm())
+
+const confirmDelete = ref({ show: false, type: '', target: null, deleting: false })
 
 function emptyVolForm() {
   return { id: null, volume_number: (store.volumes.length || 0) + 1, title: '', goal: '', summary: '' }
@@ -244,16 +247,8 @@ async function aiFillChapter() {
   }
 }
 
-async function deleteChapter(ch) {
-  if (!confirm(`确定删除「${ch.title || '第' + ch.chapter_number + '章'}」？`)) return
-  try {
-    const { novelApi } = await import('../../api/novel')
-    await novelApi.saveChapter(pid, { ...ch, _delete: true })
-    toast.success('已删除')
-    await store.fetchChapters(pid, selectedVolume.value)
-  } catch {
-    toast.error('删除失败')
-  }
+function deleteChapter(ch) {
+  confirmDelete.value = { show: true, type: 'chapter', target: ch, deleting: false }
 }
 
 async function handleRegen() {
@@ -283,16 +278,31 @@ async function saveVol() {
   finally { savingVol.value = false }
 }
 
-async function deleteVol(vol) {
-  if (!confirm(`确定删除「${vol.title || '第' + vol.volume_number + '卷'}」及其所有章节？`)) return
+function deleteVol(vol) {
+  confirmDelete.value = { show: true, type: 'volume', target: vol, deleting: false }
+}
+
+async function confirmDeleteAction() {
+  const { type, target } = confirmDelete.value
+  confirmDelete.value.deleting = true
   try {
-    await store.deleteVolume(pid, vol.id)
-    toast.success('已删除')
-    if (selectedVolume.value === vol.id) {
-      selectedVolume.value = store.volumes.length ? store.volumes[0].id : null
+    if (type === 'volume') {
+      await store.deleteVolume(pid, target.id)
+      if (selectedVolume.value === target.id) {
+        selectedVolume.value = store.volumes.length ? store.volumes[0].id : null
+      }
+      await loadData()
+      toast.success('分卷已删除')
+    } else if (type === 'chapter') {
+      await store.deleteChapter(pid, target.id)
+      toast.success('章节已删除')
     }
-    await loadData()
-  } catch { toast.error('删除失败') }
+    confirmDelete.value.show = false
+  } catch {
+    toast.error('删除失败')
+  } finally {
+    confirmDelete.value.deleting = false
+  }
 }
 
 async function aiFillVol() {
@@ -562,9 +572,14 @@ const totalWords = computed(() => {
                 >
                   生成中...
                 </VButton>
-                <button v-if="!isChapterGenerating(ch.id)" class="chapter-item__edit" @click.stop="openEdit(ch)">
+                <button v-if="!isChapterGenerating(ch.id)" class="chapter-item__edit" @click.stop="openEdit(ch)" title="编辑">
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3">
                     <path d="M8.5 2.5l3 3M2 9l6-6 3 3-6 6H2V9z" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+                <button v-if="!isChapterGenerating(ch.id)" class="chapter-item__del" @click.stop="deleteChapter(ch)" title="删除">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M4 4l8 8M12 4l-8 8" stroke-linecap="round"/>
                   </svg>
                 </button>
               </div>
@@ -647,6 +662,24 @@ const totalWords = computed(() => {
         </div>
       </template>
     </VModal>
+
+    <VConfirmModal
+      v-model="confirmDelete.show"
+      :title="confirmDelete.type === 'volume' ? '删除分卷' : '删除章节'"
+      confirm-text="确认删除"
+      :loading="confirmDelete.deleting"
+      @confirm="confirmDeleteAction"
+      @cancel="confirmDelete.show = false"
+    >
+      <template v-if="confirmDelete.type === 'volume' && confirmDelete.target">
+        <p>即将删除 <strong>「{{ confirmDelete.target.title || '第' + confirmDelete.target.volume_number + '卷' }}」</strong>，该卷下所有章节也将一并删除，此操作不可撤销。</p>
+        <p style="margin-top:8px">删除分卷会导致小说结构出现断层，可能影响后续剧情的连贯性，建议在删除前确认已备份相关内容。</p>
+      </template>
+      <template v-else-if="confirmDelete.type === 'chapter' && confirmDelete.target">
+        <p>即将删除 <strong>「{{ confirmDelete.target.title || '第' + confirmDelete.target.chapter_number + '章' }}」</strong>，此操作不可撤销。</p>
+        <p style="margin-top:8px">删除章节可能破坏剧情连贯性，若该章节包含重要伏笔或情节转折，建议先确认对后续章节无影响。</p>
+      </template>
+    </VConfirmModal>
   </div>
 </template>
 
@@ -1039,6 +1072,18 @@ const totalWords = computed(() => {
 .chapter-item__edit:hover {
   color: var(--text-primary);
   background: var(--bg-hover);
+}
+
+.chapter-item__del {
+  color: var(--text-tertiary);
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.chapter-item__del:hover {
+  color: var(--accent-red, #e53e3e);
+  background: rgba(229, 62, 62, 0.08);
 }
 
 .form-grid { display: flex; flex-direction: column; gap: 16px; }

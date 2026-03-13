@@ -36,6 +36,7 @@ export const novelApi = {
     data.id
       ? client.put(`/projects/${pid}/chapters/${data.id}`, data)
       : client.post(`/projects/${pid}/chapters`, data),
+  deleteChapter: (pid, chid) => client.delete(`/projects/${pid}/chapters/${chid}`),
 
   getPlotDevices: (pid) => client.get(`/projects/${pid}/plot-devices`),
   savePlotDevice: (pid, data) =>

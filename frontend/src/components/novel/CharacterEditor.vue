@@ -37,6 +37,7 @@ const showEditor = ref(false)
 const saving = ref(false)
 const aiGenerating = ref(false)
 const editForm = ref(emptyForm())
+const confirmDelete = ref({ show: false, target: null, deleting: false })
 
 const roleOptions = [
   { label: '男主', value: 'male_lead' },
@@ -73,10 +74,18 @@ async function saveChar() {
   finally { saving.value = false }
 }
 
-async function deleteChar(id) {
-  if (!confirm('确定删除该角色？')) return
-  try { await store.deleteCharacter(pid, id); toast.success('已删除') }
-  catch { toast.error('删除失败') }
+function deleteChar(char) {
+  confirmDelete.value = { show: true, target: char, deleting: false }
+}
+
+async function confirmDeleteChar() {
+  confirmDelete.value.deleting = true
+  try {
+    await store.deleteCharacter(pid, confirmDelete.value.target.id)
+    toast.success('角色已删除')
+    confirmDelete.value.show = false
+  } catch { toast.error('删除失败') }
+  finally { confirmDelete.value.deleting = false }
 }
 
 function handleRegenClick() {
@@ -148,7 +157,7 @@ async function aiGenerateChar() {
                 </VBadge>
               </span>
             </div>
-            <button class="char-card__del" @click.stop="deleteChar(char.id)">
+            <button class="char-card__del" @click.stop="deleteChar(char)">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8" stroke-linecap="round"/></svg>
             </button>
           </div>
@@ -212,6 +221,20 @@ async function aiGenerateChar() {
       @cancel="cancelCascade"
     >
       <p>你修改了「{{ cascadeStepLabel }}」，后续内容依赖此信息。建议重新生成以保持一致性，也可跳过稍后手动处理。</p>
+    </VConfirmModal>
+
+    <VConfirmModal
+      v-model="confirmDelete.show"
+      title="删除角色"
+      confirm-text="确认删除"
+      :loading="confirmDelete.deleting"
+      @confirm="confirmDeleteChar"
+      @cancel="confirmDelete.show = false"
+    >
+      <template v-if="confirmDelete.target">
+        <p>即将删除角色 <strong>「{{ confirmDelete.target.name }}」</strong>，此操作不可撤销。</p>
+        <p style="margin-top:8px">角色是剧情的核心要素，删除后与该角色相关的人物关系、剧情线索将失去依托，可能影响整体故事连贯性，请谨慎操作。</p>
+      </template>
     </VConfirmModal>
   </div>
 </template>

@@ -111,6 +111,11 @@ export const useNovelStore = defineStore('novel', () => {
     return res.data
   }
 
+  async function deleteChapter(projectId, chapterId) {
+    await novelApi.deleteChapter(projectId, chapterId)
+    chapters.value = chapters.value.filter(c => c.id !== chapterId)
+  }
+
   async function fetchPlotDevices(projectId) {
     const res = await novelApi.getPlotDevices(projectId)
     plotDevices.value = res.data
@@ -155,7 +160,7 @@ export const useNovelStore = defineStore('novel', () => {
     fetchRelations, saveRelation, deleteRelation,
     fetchPlotControl, savePlotControl,
     fetchVolumes, saveVolume, deleteVolume,
-    fetchChapters, saveChapter,
+    fetchChapters, saveChapter, deleteChapter, deleteChapter,
     fetchPlotDevices, savePlotDevice,
     fetchWritingStyle, saveWritingStyle,
     clearAll
