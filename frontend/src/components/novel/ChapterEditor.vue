@@ -24,6 +24,7 @@ watch(dataVersion, () => loadData())
 
 const showEditor = ref(false)
 const saving = ref(false)
+const aiGeneratingChapter = ref(false)
 const selectedVolume = ref(null)
 const volDetailOpen = ref(false)
 const generatingChapters = ref(false)
@@ -164,6 +165,74 @@ async function saveChapter() {
   try { await store.saveChapter(pid, chapterForm.value); toast.success('已保存'); showEditor.value = false }
   catch { toast.error('保存失败') }
   finally { saving.value = false }
+}
+
+async function aiFillChapter() {
+  if (!selectedVolume.value || !currentVolume.value) {
+    toast.warning('请先选择分卷')
+    return
+  }
+  aiGeneratingChapter.value = true
+  try {
+    const volumeChapters = store.chapters
+      .filter(ch => ch.volume_id === selectedVolume.value)
+      .sort((a, b) => a.chapter_number - b.chapter_number)
+
+    const existsTitles = volumeChapters
+      .filter(ch => ch.id !== chapterForm.value.id)
+      .map(ch => ch.title)
+      .filter(Boolean)
+
+    const baseNumber = chapterForm.value.chapter_number || (volumeChapters.length || 0) + 1
+
+    const hintParts = []
+    hintParts.push(`当前为第${currentVolume.value.volume_number}卷「${currentVolume.value.title || ''}」`)
+    if (currentVolume.value.summary) {
+      hintParts.push(`本卷概要：${currentVolume.value.summary.slice(0, 120)}`)
+    }
+    if (volumeChapters.length) {
+      hintParts.push(
+        '本卷已有章节（部分）：' +
+        volumeChapters.slice(0, 10).map(ch =>
+          `第${ch.chapter_number}章「${ch.title || '无标题'}」`
+        ).join('，')
+      )
+    }
+    if (existsTitles.length) {
+      hintParts.push(
+        `新章节标题必须与以下标题完全不同：${existsTitles.join('、')}`
+      )
+    }
+    hintParts.push(`请为第${baseNumber}章生成单章大纲，只返回结构化大纲，不要正文内容。`)
+
+    const hint = hintParts.join('\n')
+
+    const res = await aiApi.generateSingleItem(pid, 'chapter', hint)
+    const data = res.data || res
+
+    if (data.chapter_number) {
+      chapterForm.value.chapter_number = data.chapter_number
+    }
+    if (data.title) {
+      chapterForm.value.title = data.title
+    }
+
+    const outlinePieces = []
+    if (data.outline) outlinePieces.push(data.outline)
+    if (data.key_scenes) outlinePieces.push(`【关键场景】${data.key_scenes}`)
+    if (outlinePieces.length) {
+      chapterForm.value.content = outlinePieces.join('\n')
+      if (!chapterForm.value.status) {
+        chapterForm.value.status = 'draft'
+      }
+    }
+
+    toast.success('AI 已生成章节大纲，请检查后保存')
+  } catch (err) {
+    toast.error(err?.error || 'AI 生成失败')
+  } finally {
+    aiGeneratingChapter.value = false
+  }
 }
 
 async function deleteChapter(ch) {
@@ -418,8 +487,25 @@ const totalWords = computed(() => {
         <VTextarea v-model="chapterForm.content" label="章节内容" placeholder="在此编写章节内容..." :rows="12" :maxHeight="420" noResize />
       </div>
       <template #footer>
-        <VButton variant="secondary" @click="showEditor = false">取消</VButton>
-        <VButton variant="primary" :loading="saving" :disabled="isGenerating" @click="saveChapter">保存</VButton>
+        <div class="modal-footer-full">
+          <VButton
+            variant="ghost"
+            size="sm"
+            :loading="aiGeneratingChapter"
+            :disabled="isGenerating || aiGeneratingChapter"
+            @click="aiFillChapter"
+            class="ai-fill-btn"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0">
+              <path d="M7 1v3M7 10v3M1 7h3M10 7h3M2.8 2.8l2.1 2.1M9.1 9.1l2.1 2.1M11.2 2.8l-2.1 2.1M4.9 9.1l-2.1 2.1" stroke-linecap="round"/>
+            </svg>
+            AI 智能填充章节
+          </VButton>
+          <div class="modal-footer-right">
+            <VButton variant="secondary" @click="showEditor = false">取消</VButton>
+            <VButton variant="primary" :loading="saving" :disabled="isGenerating" @click="saveChapter">保存</VButton>
+          </div>
+        </div>
       </template>
     </VModal>
   </div>
@@ -454,6 +540,27 @@ const totalWords = computed(() => {
 .section-header__actions {
   display: flex;
   gap: 8px;
+}
+
+.modal-footer-full {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.modal-footer-right {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.ai-fill-btn {
+  color: var(--accent-blue, #0070f3);
+}
+
+.ai-fill-btn:hover:not(:disabled) {
+  background: var(--accent-blue-subtle, rgba(0, 112, 243, 0.08));
+  color: var(--accent-blue, #0070f3);
 }
 
 .regen-bar {
