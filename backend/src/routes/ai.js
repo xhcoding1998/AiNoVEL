@@ -851,10 +851,26 @@ device_type 说明：
   }
 
   if (itemType === 'volume') {
-    const volCount = existingMaterial?.volumes?.length || 0
+    const existingVols = existingMaterial?.volumes || []
+    const volCount = existingVols.length
+    const volTitles = existingVols.map(v => v.title).filter(Boolean)
+
+    const volList = existingVols.length
+      ? `\n\n【已有分卷（必须衔接）】\n${existingVols.map(
+          v => `- 第${v.volume_number}卷「${v.title || '无标题'}」：${(v.summary || '').slice(0, 80)}`
+        ).join('\n')}`
+      : ''
+
+    const forbidBlock = volTitles.length
+      ? `\n\n⚠️⚠️⚠️ 【标题禁止重复】以下卷标题已存在，新卷标题绝对不能与它们相同：\n${volTitles.map(t => `- ${t}`).join('\n')}`
+      : ''
+
+    const userHint = userContext ? `\n\n【用户补充要求】\n${userContext}` : ''
+
     return `你是一位分卷策划师。请基于已有物料，生成一个新的卷大纲。
 
 ${JSON_RULE}
+${volList}${forbidBlock}${userHint}${ctx}
 
 JSON 结构：
 {
@@ -865,9 +881,11 @@ JSON 结构：
 }
 
 要求：
-1. 与前面的卷情节衔接，冲突层层升级
-2. 有明确的起承转合
-3. 结尾有钩子引导读者继续${ctx}`
+1. 严格承接已有分卷的剧情发展，冲突层层升级，不能出现设定矛盾
+2. 新卷标题必须是全新的，不得与已有卷标题重复
+3. 有明确的起承转合
+4. 结尾有钩子引导读者继续
+5. 本卷核心目标要与前面卷的发展形成递进关系`
   }
 
   return ''

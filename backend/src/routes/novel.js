@@ -205,6 +205,15 @@ novel.put('/:id/volumes/:vid', async (c) => {
   return c.json({ data })
 })
 
+novel.delete('/:id/volumes/:vid', async (c) => {
+  const pid = await verifyProjectOwner(c)
+  if (!pid) return c.json({ error: '项目不存在' }, 404)
+  const vid = c.req.param('vid')
+  const [data] = await sql`DELETE FROM volumes WHERE id = ${vid} AND project_id = ${pid} RETURNING *`
+  if (!data) return c.json({ error: '卷不存在' }, 404)
+  return c.json({ data })
+})
+
 // --- Chapters ---
 novel.get('/:id/volumes/:vid/chapters', async (c) => {
   const pid = await verifyProjectOwner(c)
@@ -242,6 +251,15 @@ novel.put('/:id/chapters/:chid', async (c) => {
       updated_at = NOW()
     WHERE id = ${chid} AND project_id = ${pid} RETURNING *
   `
+  if (!data) return c.json({ error: '章节不存在' }, 404)
+  return c.json({ data })
+})
+
+novel.delete('/:id/chapters/:chid', async (c) => {
+  const pid = await verifyProjectOwner(c)
+  if (!pid) return c.json({ error: '项目不存在' }, 404)
+  const chid = c.req.param('chid')
+  const [data] = await sql`DELETE FROM chapters WHERE id = ${chid} AND project_id = ${pid} RETURNING *`
   if (!data) return c.json({ error: '章节不存在' }, 404)
   return c.json({ data })
 })
