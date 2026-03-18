@@ -342,7 +342,7 @@ JSON 结构：
   "characters": [
     {
       "name": "角色全名（要有记忆点和象征意味）",
-      "role_type": "male_lead / female_lead / supporting / antagonist",
+      "role_type": "male_lead / female_lead / supporting / antagonist / minor",
       "description": "角色详述（300字以上，包括：①外貌特征（辨识度高的细节） ②性格核心（用MBTI或关键词概括+展开） ③出身背景 ④技能/能力特长 ⑤标志性行为习惯或口头禅）",
       "core_desire": "核心欲望（100字以上，不是表面目标而是深层心理需求，如'不是想变强，而是恐惧再次失去'）",
       "weakness": "致命弱点（100字以上，必须是真正能造成困境的弱点，而非无关痛痒的小毛病。包括：弱点来源、如何被敌人利用、对剧情的影响）",
@@ -352,14 +352,14 @@ JSON 结构：
 }
 
 要求：
-1. 原创作品：角色数量无限制，需要根据长篇小说需要合理分配角色数量，确保小说有足够的角色来支撑故事发展；IP 改编：以原作核心角色为主体（至少 4 个核心角色），可适当增加原创角色丰富故事
+1. 原创作品：角色数量必须充足，**至少 10-15 个角色**（含主角、配角、反派、龙套等），需要根据长篇小说需要合理分配角色数量，确保小说有足够的角色来支撑故事发展，绝对不能只生成 6 个或更少的角色；IP 改编：以原作核心角色为主体（至少 8 个核心角色），并增加足够的原创角色丰富故事，总数不少于 10 个
 2. IP 改编时：原作角色的 description 必须首先准确还原其经典形象特征（外貌、性格、能力、口头禅、标志性行为等），再叠加本作中的发展变化
 3. 每个角色必须有独特的说话方式和行为模式，IP 角色的言行必须符合原作人设
 4. 角色间的欲望和秘密必须互相纠缠，制造天然冲突
 5. 主角不能完美无缺，弱点要真正影响剧情
 6. 反派要有令人共情甚至认同的一面，不要脸谱化
 7. 配角不是工具人，要有自己的目标线和成长弧
-8. IP 改编时 role_type 按角色在本作中的实际定位分配，不必强套男主/女主模板（如《西游记》中可以孙悟空为 male_lead，唐僧为 supporting 等）${contextBlock(existing)}`
+8. role_type 说明：male_lead（男主）、female_lead（女主）、supporting（配角，有独立目标线和成长弧）、antagonist（反派，有令人共情的一面）、minor（龙套，功能性角色，如店小二、路人甲、信使等，description 可适当简短）；IP 改编时按角色在本作中的实际定位分配，不必强套男主/女主模板${contextBlock(existing)}`
 }
 
 function buildRelationsPrompt(userPrompt, existing) {
@@ -482,7 +482,7 @@ JSON 结构：
 }
 
 要求：
-1. 至少 4 卷，每卷有明确的起承转合
+1. 卷数必须充足，**至少 6-10 卷**，需要根据长篇小说体量合理规划，确保故事有足够的发展空间，绝对不能只生成 4 卷或更少；如果故事体量较大（如百万字以上的长篇），应规划 10 卷以上
 2. 第一卷必须在开头制造强冲突快速抓住读者
 3. 每卷结尾必须有钩子让读者想看下一卷
 4. 卷与卷之间的冲突要层层升级（对手更强、筹码更大、代价更高）
@@ -547,7 +547,7 @@ JSON 结构如下:
 {
   "basic_info": { "ip_analysis": {}, "book_name": "", "genre": "", "style": "", "core_selling_point": "", "one_line_summary": "", "target_readers": "" },
   "world_building": { "era_setting": "", "power_structure": "", "rules": "", "social_atmosphere": "" },
-  "characters": [{ "name": "", "role_type": "male_lead/female_lead/supporting/antagonist", "description": "", "core_desire": "", "weakness": "", "secret": "" }],
+  "characters": [{ "name": "", "role_type": "male_lead/female_lead/supporting/antagonist/minor", "description": "", "core_desire": "", "weakness": "", "secret": "" }],
   "relations": [{ "from_name": "", "to_name": "", "relation_type": "", "faction": "", "interest_link": "", "emotion_link": "", "description": "" }],
   "plot_control": { "main_storyline": "", "outline_summary": "" },
   "volumes": [{ "volume_number": 1, "title": "", "goal": "", "summary": "" }],
@@ -555,7 +555,7 @@ JSON 结构如下:
 }
 
 要求：
-1. IP 改编时以原作核心角色为主体，原创时角色数量无限制，需要根据长篇小说需要合理分配角色数量，确保小说有足够的角色来支撑故事发展；relations关系数量无限制，需要根据长篇小说需要合理分配关系数量，确保小说有足够的关系来支撑故事发展；volumes卷数无限制，需要根据长篇小说需要合理分配卷数，确保小说有足够的卷数来支撑故事发展
+1. 原创时角色数量至少 10-15 个（含主角、配角、反派等），IP 改编时以原作核心角色为主体且总数不少于 10 个；relations 关系数量至少 12-20 条；volumes 卷数至少 6-10 卷，长篇应规划 10 卷以上；绝对不能只生成最少量
 2. 所有字段内容详细丰富
 3. IP 改编时角色、世界观、剧情必须忠于原作基底，在此之上融入用户的改编方向`
 
@@ -643,7 +643,7 @@ JSON 结构：
 }
 
 要求：
-1. 每卷章节数量无限制，需要根据长篇小说需要合理分配章节数量，确保小说有足够的章节来支撑故事发展
+1. 每卷章节数量必须充足，**每卷至少 15-30 章**，需要根据长篇小说需要合理分配章节数量，确保小说有足够的章节来支撑故事发展，绝对不能每卷只生成几章
 2. 第一章开头必须有强冲突快速抓住读者
 3. 每章末尾必须有钩子引导读者继续
 4. 章节间要有节奏变化：紧张→舒缓→高潮交替

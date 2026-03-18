@@ -591,7 +591,7 @@ async function processChapterOutlines(taskId, projectId, volume, prompt, userCon
     const userPrompt = prompt || `请为第${volume.volume_number}卷生成章节大纲`
     const chunker = createChunkLogger(projectId, taskId)
     const result = await callAI(userConfig, systemPrompt, userPrompt, {
-      json_mode: true, max_tokens: 8192,
+      json_mode: true, max_tokens: 32768,
       onChunk: (t) => chunker.push(t)
     })
     await chunker.flush()
@@ -783,7 +783,7 @@ ${JSON_RULE}
 JSON 结构：
 {
   "name": "角色全名",
-  "role_type": "male_lead / female_lead / supporting / antagonist",
+  "role_type": "male_lead / female_lead / supporting / antagonist / minor",
   "description": "角色详述（150字以上，包括外貌、性格、出身、技能）",
   "core_desire": "核心欲望（50字以上）",
   "weakness": "致命弱点（50字以上）",

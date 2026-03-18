@@ -43,11 +43,12 @@ const roleOptions = [
   { label: '男主', value: 'male_lead' },
   { label: '女主', value: 'female_lead' },
   { label: '配角', value: 'supporting' },
-  { label: '反派', value: 'antagonist' }
+  { label: '反派', value: 'antagonist' },
+  { label: '龙套', value: 'minor' }
 ]
 
-const roleLabelMap = { male_lead: '男主', female_lead: '女主', supporting: '配角', antagonist: '反派' }
-const roleVariantMap = { male_lead: 'info', female_lead: 'purple', supporting: 'default', antagonist: 'danger' }
+const roleLabelMap = { male_lead: '男主', female_lead: '女主', supporting: '配角', antagonist: '反派', minor: '龙套' }
+const roleVariantMap = { male_lead: 'info', female_lead: 'purple', supporting: 'default', antagonist: 'danger', minor: 'warning' }
 
 function emptyForm() {
   return { id: null, name: '', role_type: 'supporting', description: '', core_desire: '', weakness: '', secret: '', avatar_color: '#333' }
