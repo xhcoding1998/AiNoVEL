@@ -289,8 +289,51 @@ JSON 结构：
 }
 
 function buildCharactersPrompt(userPrompt, existing) {
+  const existingChars = existing?.characters || []
+  const hasExisting = existingChars.length > 0
+
+  const addModifyPattern = /增加|新增|添加|补充|加一个|加个|多加|再加|修改|调整|改一下|改为|换成|改个/
+  const isIncremental = hasExisting && userPrompt && addModifyPattern.test(userPrompt)
+
+  let modeInstruction = ''
+  if (isIncremental) {
+    modeInstruction = `
+
+⚠️⚠️⚠️【增量模式 — 最高优先级，必须严格遵守】
+用户要求在现有角色基础上进行新增或修改，**绝对不是**要求重新生成全部角色。你必须：
+1. 在返回的 characters 数组中 **完整保留所有现有角色** 的全部字段数据（未被用户明确提及要修改的角色，其所有字段必须原样返回，一个字都不能改动）
+2. 仅根据用户的具体指令进行新增角色或修改指定角色
+3. 新增角色的名字不能与现有角色重复
+4. 修改角色时只改用户明确要求修改的字段，其他字段保持原样
+
+当前已有角色（必须全部保留在返回结果中）：
+${existingChars.map(c => `  - ${c.name}（${c.role_type}）：${(c.description || '').slice(0, 80)}`).join('\n')}
+
+用户的具体要求：${userPrompt}`
+  } else if (hasExisting) {
+    const projectContext = []
+    if (existing?.basic_info?.book_name) projectContext.push(`书名：${existing.basic_info.book_name}`)
+    if (existing?.basic_info?.genre) projectContext.push(`类型：${existing.basic_info.genre}`)
+    if (existing?.basic_info?.style) projectContext.push(`风格：${existing.basic_info.style}`)
+    if (existing?.basic_info?.one_line_summary) projectContext.push(`主线：${existing.basic_info.one_line_summary}`)
+    if (existing?.world_building?.era_setting) projectContext.push(`时代背景：${(existing.world_building.era_setting || '').slice(0, 300)}`)
+    if (existing?.world_building?.power_structure) projectContext.push(`势力结构：${(existing.world_building.power_structure || '').slice(0, 200)}`)
+
+    modeInstruction = `
+
+⚠️⚠️⚠️【全量重新生成模式 — 必须严格基于项目上下文】
+用户要求重新生成角色设定。你必须严格基于以下项目核心设定来重新设计角色群像，角色必须完全匹配项目的题材、世界观和剧情方向：
+${projectContext.join('\n')}
+
+绝对不能生成与项目主题无关的角色！
+- 如果项目是西游题材，角色必须是西游世界中的人物（唐僧、孙悟空、猪八戒等）
+- 如果项目是三国题材，角色必须是三国世界中的人物
+- 如果项目是都市题材，角色必须符合都市背景
+你可以重新诠释角色的细节，但核心设定必须与项目的世界观和剧情方向保持一致。${userPrompt ? `\n\n用户补充要求：${userPrompt}` : ''}`
+  }
+
   return `你是一位角色塑造专家，擅长设计立体、有魅力、有记忆点的小说角色。请根据用户提示词和已有物料，设计完整的角色群像。
-${buildIPAwareHint(existing)}
+${buildIPAwareHint(existing)}${modeInstruction}
 
 ${JSON_RULE}
 

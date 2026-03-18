@@ -197,7 +197,7 @@ ai.post('/:id/generate-single-item', async (c) => {
   const pid = await verifyProjectOwner(c)
   if (!pid) return c.json({ error: '项目不存在' }, 404)
 
-  const { item_type, context } = await c.req.json()
+  const { item_type, context, user_data } = await c.req.json()
   const validTypes = ['character', 'relation', 'volume', 'plot_device', 'chapter']
   if (!validTypes.includes(item_type)) {
     return c.json({ error: '无效的生成类型' }, 400)
@@ -212,7 +212,7 @@ ai.post('/:id/generate-single-item', async (c) => {
     if (latest) existingMaterial = latest.content
   } catch { /* ignore */ }
 
-  const prompt = buildSingleItemPrompt(item_type, existingMaterial, context)
+  const prompt = buildSingleItemPrompt(item_type, existingMaterial, context, user_data)
   try {
     const result = await callAI(userConfig, prompt, context || '请生成一条新内容', { json_mode: true, max_tokens: 4096 })
     const parsed = JSON.parse(result.trim().replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, ''))
@@ -531,8 +531,19 @@ async function processSingleSection(taskId, projectId, section, prompt, userConf
       existingMaterial = material.content
     } catch { /* ignore */ }
 
+    const [proj] = await sql`SELECT initial_prompt FROM projects WHERE id = ${projectId}`
+    const initialPrompt = proj?.initial_prompt || ''
+
     const systemPrompt = buildStepPrompt(section, prompt, existingMaterial)
-    const userPrompt = prompt || `请重新生成该部分内容，保持与其他部分的一致性`
+    let userPrompt = ''
+    if (initialPrompt) {
+      userPrompt += `【项目原始创作提示词（必须严格遵守此创作方向）】\n${initialPrompt}\n\n`
+    }
+    if (prompt) {
+      userPrompt += `【用户本次补充要求】\n${prompt}`
+    } else {
+      userPrompt += '请基于项目原始创作方向和已有物料，重新生成该部分内容，确保与项目整体设定高度一致'
+    }
     const maxTokens = STEP_MAX_TOKENS[section] || 128000
     const chunker = createChunkLogger(projectId, taskId)
     const result = await callAI(userConfig, systemPrompt, userPrompt, {
@@ -715,7 +726,7 @@ ai.get('/:id/generation-logs/stream', async (c) => {
   })
 })
 
-function buildSingleItemPrompt(itemType, existingMaterial, userContext) {
+function buildSingleItemPrompt(itemType, existingMaterial, userContext, userData) {
   const ctx = existingMaterial && Object.keys(existingMaterial).length
     ? `\n\n【当前已有物料（请保持一致性）】\n${JSON.stringify(existingMaterial, null, 2)}`
     : ''
@@ -730,8 +741,43 @@ function buildSingleItemPrompt(itemType, existingMaterial, userContext) {
       ? `\n\n【已有角色概览】\n${existingChars.map(c => `- ${c.name}（${c.role_type}）：${(c.description || '').slice(0, 60)}`).join('\n')}`
       : ''
 
-    return `你是一位角色塑造专家。请基于已有物料和用户要求，设计一个新的角色。
+    const hasUserData = userData && Object.values(userData).some(v => v && String(v).trim())
+    const filledFields = []
+    const emptyFields = []
+    if (hasUserData) {
+      const fieldLabels = { name: '角色名', role_type: '角色类型', description: '角色描述', core_desire: '核心欲望', weakness: '弱点', secret: '秘密' }
+      for (const [key, label] of Object.entries(fieldLabels)) {
+        const val = userData[key]
+        if (val && String(val).trim() && key !== 'id' && key !== 'avatar_color') {
+          filledFields.push({ key, label, value: String(val).trim() })
+        } else {
+          emptyFields.push({ key, label })
+        }
+      }
+    }
 
+    let fillInstruction = ''
+    if (hasUserData && filledFields.length > 0) {
+      fillInstruction = `
+
+⚠️⚠️⚠️【智能填充模式 — 最高优先级】
+用户已经填写了部分角色信息，你的任务是 **基于用户已填内容进行补充和优化**，而不是生成全新内容。
+
+用户已填写的内容（必须保留并作为创作基础）：
+${filledFields.map(f => `  - ${f.label}：${f.value}`).join('\n')}
+
+需要你填充/生成的字段：
+${emptyFields.map(f => `  - ${f.label}`).join('\n')}
+
+核心规则：
+1. 用户已填写的字段（如名字、描述等），你可以在此基础上润色扩展，但**不能改变核心含义和方向**
+2. 如果用户填了名字，返回的 name 必须与用户填写的完全一致
+3. 如果用户填了描述，你的 description 必须包含用户的描述内容，可以在此基础上丰富拓展
+4. 空白字段则根据已有信息和项目物料进行合理创作`
+    }
+
+    return `你是一位角色塑造专家。请基于已有物料和用户要求，设计一个新的角色。
+${fillInstruction}
 ${JSON_RULE}
 
 JSON 结构：

@@ -102,18 +102,42 @@ async function aiGenerateChar() {
     const nameWarning = existingNames.length
       ? `\n⚠️ 已有角色：${existingNames.join('、')}。新角色名字必须与以上所有角色不同！`
       : ''
-    const hint = editForm.value.name
-      ? `角色名为「${editForm.value.name}」，类型为${roleLabelMap[editForm.value.role_type] || '配角'}${nameWarning}`
-      : `请生成一个${roleLabelMap[editForm.value.role_type] || '配角'}类型的角色${nameWarning}`
-    const res = await aiApi.generateSingleItem(pid, 'character', hint)
+
+    const form = editForm.value
+    const hasAnyInput = form.name?.trim() || form.description?.trim() || form.core_desire?.trim() || form.weakness?.trim() || form.secret?.trim()
+
+    const hint = hasAnyInput
+      ? `角色名为「${form.name || '待定'}」，类型为${roleLabelMap[form.role_type] || '配角'}，请基于用户已填写的内容进行补充优化${nameWarning}`
+      : `请生成一个${roleLabelMap[form.role_type] || '配角'}类型的角色${nameWarning}`
+
+    const userData = hasAnyInput ? {
+      name: form.name?.trim() || '',
+      role_type: form.role_type || 'supporting',
+      description: form.description?.trim() || '',
+      core_desire: form.core_desire?.trim() || '',
+      weakness: form.weakness?.trim() || '',
+      secret: form.secret?.trim() || ''
+    } : undefined
+
+    const res = await aiApi.generateSingleItem(pid, 'character', hint, userData)
     const data = res.data || res
-    editForm.value.name = data.name || editForm.value.name
-    editForm.value.role_type = data.role_type || editForm.value.role_type
-    editForm.value.description = data.description || ''
-    editForm.value.core_desire = data.core_desire || ''
-    editForm.value.weakness = data.weakness || ''
-    editForm.value.secret = data.secret || ''
-    toast.success('AI 已生成角色内容，请检查后保存')
+
+    if (hasAnyInput) {
+      editForm.value.name = form.name?.trim() || data.name || editForm.value.name
+      editForm.value.role_type = form.role_type || data.role_type || editForm.value.role_type
+      editForm.value.description = data.description || form.description || ''
+      editForm.value.core_desire = data.core_desire || form.core_desire || ''
+      editForm.value.weakness = data.weakness || form.weakness || ''
+      editForm.value.secret = data.secret || form.secret || ''
+    } else {
+      editForm.value.name = data.name || editForm.value.name
+      editForm.value.role_type = data.role_type || editForm.value.role_type
+      editForm.value.description = data.description || ''
+      editForm.value.core_desire = data.core_desire || ''
+      editForm.value.weakness = data.weakness || ''
+      editForm.value.secret = data.secret || ''
+    }
+    toast.success(hasAnyInput ? 'AI 已基于你的输入补充完善，请检查后保存' : 'AI 已生成角色内容，请检查后保存')
   } catch (err) {
     toast.error(err?.error || 'AI 生成失败')
   } finally {
