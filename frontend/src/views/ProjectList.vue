@@ -11,6 +11,7 @@ import VInput from '../components/ui/VInput.vue'
 import VTextarea from '../components/ui/VTextarea.vue'
 import VLoading from '../components/ui/VLoading.vue'
 import VDropdown from '../components/ui/VDropdown.vue'
+import VConfirmModal from '../components/ui/VConfirmModal.vue'
 
 const router = useRouter()
 const store = useProjectStore()
@@ -20,6 +21,9 @@ const showCreate = ref(false)
 const newPrompt = ref('')
 const newName = ref('')
 const creating = ref(false)
+const showDeleteConfirm = ref(false)
+const deletingProjectId = ref(null)
+const deleting = ref(false)
 
 onMounted(() => store.fetchProjects())
 
@@ -46,13 +50,21 @@ async function createProject() {
   }
 }
 
-async function deleteProject(id) {
-  if (!confirm('确定删除该项目？此操作不可恢复')) return
+function requestDeleteProject(id) {
+  deletingProjectId.value = id
+  showDeleteConfirm.value = true
+}
+
+async function confirmDeleteProject() {
+  deleting.value = true
   try {
-    await store.deleteProject(id)
+    await store.deleteProject(deletingProjectId.value)
     toast.success('已删除')
+    showDeleteConfirm.value = false
   } catch (err) {
     toast.error('删除失败')
+  } finally {
+    deleting.value = false
   }
 }
 
@@ -111,7 +123,7 @@ function getGenStatus(proj) {
             <h3 class="project-item__name">{{ proj.name }}</h3>
             <VDropdown
               :items="[{ label: '删除', value: 'delete', danger: true }]"
-              @select="deleteProject(proj.id)"
+              @select="requestDeleteProject(proj.id)"
             >
               <template #trigger>
                 <button class="project-item__more">
@@ -175,6 +187,17 @@ function getGenStatus(proj) {
         </VButton>
       </template>
     </VModal>
+
+    <VConfirmModal
+      v-model="showDeleteConfirm"
+      title="确认删除项目"
+      confirm-text="删除"
+      :loading="deleting"
+      @confirm="confirmDeleteProject"
+      @cancel="showDeleteConfirm = false"
+    >
+      <p>确定删除该项目吗？所有章节、角色、关系等数据都将被永久删除，此操作不可恢复。</p>
+    </VConfirmModal>
   </div>
 </template>
 

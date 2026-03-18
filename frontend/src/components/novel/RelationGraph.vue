@@ -42,6 +42,9 @@ const showAddRelation = ref(false)
 const saving = ref(false)
 const aiGenerating = ref(false)
 const expandedRelation = ref(null)
+const showDeleteConfirm = ref(false)
+const deletingRelationId = ref(null)
+const deleting = ref(false)
 const relationForm = ref({
   id: null, from_character_id: null, to_character_id: null,
   relation_type: '', faction: '', interest_link: '', emotion_link: '', description: ''
@@ -81,10 +84,22 @@ async function saveRelation() {
   finally { saving.value = false }
 }
 
-async function deleteRelation(id) {
-  if (!confirm('确定删除该关系？')) return
-  try { await store.deleteRelation(pid, id); toast.success('已删除') }
-  catch { toast.error('删除失败') }
+function requestDeleteRelation(id) {
+  deletingRelationId.value = id
+  showDeleteConfirm.value = true
+}
+
+async function confirmDeleteRelation() {
+  deleting.value = true
+  try {
+    await store.deleteRelation(pid, deletingRelationId.value)
+    toast.success('已删除')
+    showDeleteConfirm.value = false
+  } catch {
+    toast.error('删除失败')
+  } finally {
+    deleting.value = false
+  }
 }
 
 function handleRegenClick() {
@@ -271,7 +286,7 @@ const roleLabel = { male_lead: '男主', female_lead: '女主', supporting: '配
             <VBadge :variant="typeVariant[r.relation_type] || 'default'">{{ r.relation_type }}</VBadge>
             <VBadge v-if="r.faction" variant="default">{{ r.faction }}</VBadge>
           </div>
-          <button class="rel-row__del" @click.stop="deleteRelation(r.id)">
+          <button class="rel-row__del" @click.stop="requestDeleteRelation(r.id)">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8" stroke-linecap="round"/></svg>
           </button>
         </div>
@@ -356,6 +371,17 @@ const roleLabel = { male_lead: '男主', female_lead: '女主', supporting: '配
       @cancel="cancelCascade"
     >
       <p>你修改了「{{ cascadeStepLabel }}」，后续内容依赖此信息。建议重新生成以保持一致性，也可跳过稍后手动处理。</p>
+    </VConfirmModal>
+
+    <VConfirmModal
+      v-model="showDeleteConfirm"
+      title="确认删除关系"
+      confirm-text="删除"
+      :loading="deleting"
+      @confirm="confirmDeleteRelation"
+      @cancel="showDeleteConfirm = false"
+    >
+      <p>确定删除该关系吗？此操作不可恢复。</p>
     </VConfirmModal>
   </div>
 </template>
