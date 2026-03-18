@@ -171,6 +171,33 @@ export function contextBlock(existingMaterial) {
 
 const JSON_RULE = `你必须返回严格的 JSON 格式。不要包含任何额外文字、markdown 标记、代码块标记。直接返回 JSON 对象。`
 
+function buildIPAwareHint(existing) {
+  const ipAnalysis = existing?.basic_info?.ip_analysis
+  if (!ipAnalysis || !ipAnalysis.is_ip_based) return ''
+
+  const sources = Array.isArray(ipAnalysis.source_works)
+    ? ipAnalysis.source_works.join('、')
+    : (ipAnalysis.source_works || '未知')
+  const chars = Array.isArray(ipAnalysis.known_characters)
+    ? ipAnalysis.known_characters.join('、')
+    : ''
+  const era = ipAnalysis.era_context || ''
+  const traits = ipAnalysis.character_traits_summary || ''
+
+  return `\n\n⚠️⚠️⚠️【IP 改编创作模式 — 必须严格遵守】
+本作品基于经典作品「${sources}」进行改编/续写/再创作。
+${era ? `原作时代与文化语境：${era}` : ''}
+${chars ? `原作核心角色：${chars}` : ''}
+${traits ? `角色特征速写：${traits}` : ''}
+IP 改编铁律：
+1. 原作角色必须保留经典性格、说话方式、能力设定、外貌特征和人物关系，可以深化发展但不能背离原作人格内核
+2. 原作世界观（时代、地理、势力、力量体系、文化）是创作根基，新设定必须与原作逻辑自洽
+3. 故事时间线必须明确衔接原作，不能与原作已有事件产生矛盾
+4. 原作的文化语境和时代特征必须准确还原（不能出现违和的现代用语，除非是刻意的讽刺反差手法）
+5. 改编方向：${ipAnalysis.original_elements || '见用户提示词'}
+6. 必须保留：${ipAnalysis.must_preserve || '核心人物关系与世界观'}`
+}
+
 export function buildStepPrompt(step, userPrompt, existingMaterial) {
   const builders = {
     basic_info: buildBasicInfoPrompt,
@@ -185,31 +212,61 @@ export function buildStepPrompt(step, userPrompt, existingMaterial) {
 }
 
 function buildBasicInfoPrompt(userPrompt, existing) {
-  return `你是一位顶级网文策划编辑，拥有十年以上爆款小说策划经验。用户会给你一段创作灵感/提示词，你需要从中提炼出一部商业小说的核心定位。
+  return `你是一位顶级小说策划编辑，拥有十年以上创作策划经验和深厚的中外文学功底。用户会给你一段创作灵感/提示词，你需要从中提炼出一部小说的核心定位。
+
+⚠️⚠️⚠️【第一优先级：IP 识别与分析】
+在生成任何其他内容之前，你必须首先深入分析用户的提示词，判断是否涉及已有经典 IP（文学/影视/游戏/神话/历史等作品）。
+
+判断标准：
+- 出现经典人物名（唐僧、孙悟空、哈利波特、诸葛亮、林黛玉、路飞等）→ IP 改编
+- 出现经典作品名或标志性设定（取经、霍格沃茨、三国、贾府、中土世界等）→ IP 改编
+- 涉及具体神话体系/历史事件（希腊神话、封神、三国时期、大唐西域等）→ IP 改编
+- 仅涉及通用题材概念（修仙、穿越、系统、末日等）且无具体作品指向 → 原创
+- 完全自创人物和世界 → 原创
+
+若判定为 IP 改编，你必须：
+1. 凭借你对原作的深入理解，详尽填写 ip_analysis 每个字段
+2. character_traits_summary 中必须准确还原原作角色的经典特征（性格内核、口头禅、行为模式、能力、经典桥段等），绝不能编造原作不存在的设定
+3. original_elements 中精确提炼用户想要的改编/续写/颠覆方向与深层主题
+4. must_preserve 中列出原作不可更改的核心要素
 
 ${JSON_RULE}
 
 JSON 结构：
 {
   "basic_info": {
-    "book_name": "书名（要求：朗朗上口、有记忆点、暗示核心冲突或卖点）",
-    "genre": "精确题材分类（都市/玄幻/仙侠/科幻/悬疑/言情/历史/末日/游戏/无限流/系统文等，可以组合如'都市+悬疑'）",
-    "style": "风格标签（如：热血爽文/暗黑烧脑/轻松搞笑/细腻文艺/硬核写实/甜宠日常/权谋诡计等，2-3个标签）",
-    "core_selling_point": "核心卖点（200字以上，分析：①独特设定/金手指 ②核心爽点循环 ③差异化竞争力 ④情感钩子）",
-    "one_line_summary": "一句话主线（格式：谁+在什么处境下+做什么+核心冲突是什么+终极目标是什么）",
-    "target_readers": "目标读者画像（100字以上，包括：年龄层、性别偏好、阅读偏好、他们在其他作品中追的是什么感觉）"
+    "ip_analysis": {
+      "is_ip_based": true,
+      "source_works": ["涉及的原作名称，如：西游记、三国演义"],
+      "era_context": "原作时代与文化语境的详细描述（200字以上，如：唐朝贞观年间+天庭/佛门/妖界三界并立体系+佛道势力暗中角逐的格局等）",
+      "known_characters": ["原作中涉及的核心角色名列表"],
+      "character_traits_summary": "核心角色的原作特征速写（每个角色50-100字，涵盖性格内核、标志性言行、能力特长、经典形象，务必准确不可编造）",
+      "original_elements": "用户提示中超出原作的改编方向与主题立意（200字以上，精确提炼用户的创新构思、想表达的深层主题、与现实的映射关系等）",
+      "must_preserve": "必须保留的原作核心要素清单（关键人物关系、世界观规则、文化背景、标志性设定等）"
+    },
+    "book_name": "书名（4-10字，朗朗上口、有记忆点。IP改编时应让读者一眼看出IP关联又有新意）",
+    "genre": "精确题材分类（可组合，如'神话+现实讽喻'、'都市+悬疑'。IP改编时标注'IP改编+具体类型'）",
+    "style": "风格标签（2-3个，如：解构讽刺/暗黑现实/热血爽文/权谋诡计等）",
+    "core_selling_point": "核心卖点（200字以上：①独特设定/金手指 ②核心爽点循环 ③差异化竞争力 ④情感钩子。IP改编额外分析：⑤与原作的反差看点 ⑥老粉共鸣点与颠覆感）",
+    "one_line_summary": "一句话主线（格式：谁+在什么处境下+做什么+核心冲突+终极目标）",
+    "target_readers": "目标读者画像（100字以上：年龄层、阅读偏好、追求的阅读体验。IP改编时说明原作粉丝vs新读者的兼顾策略）"
   }
 }
 
+⚠️ 注意：若为原创作品，ip_analysis.is_ip_based 设为 false，source_works 设为空数组，其余 ip_analysis 子字段可填写"无"或简短说明即可。
+
 要求：
-1. 书名要有网感和吸引力，不要太文艺晦涩，一般在4-10个字之内
-2. 核心卖点要详细分析，不是一句话概括
-3. 一句话主线必须包含冲突和悬念
-4. 每个字段内容都要丰富详实${contextBlock(existing)}`
+1. IP 识别是最关键的第一步，必须准确判断——这决定了后续所有步骤的创作方向
+2. 若为 IP 改编：character_traits_summary 必须体现你对原作人物的深入理解，绝不能用泛泛的描述敷衍
+3. 书名要有吸引力，4-10字为宜
+4. 核心卖点要详细分析，不是一句话概括
+5. 一句话主线必须包含冲突和悬念
+6. 每个字段内容都要丰富详实${contextBlock(existing)}`
 }
 
 function buildWorldBuildingPrompt(userPrompt, existing) {
-  return `你是一位世界观架构师，擅长为网络小说构建宏大而自洽的世界设定。请基于用户提示词和已有物料，构建完整的世界观体系。
+  return `你是一位世界观架构师，擅长为小说构建宏大而自洽的世界设定。请基于用户提示词和已有物料，构建完整的世界观体系。
+${buildIPAwareHint(existing)}
 
 ${JSON_RULE}
 
@@ -227,11 +284,13 @@ JSON 结构：
 1. 世界观必须服务于故事冲突，不要为设定而设定
 2. 势力结构要有明确的利益纠葛和灰色地带
 3. 规则设定要有"可被利用的漏洞"为主角留空间
-4. 所有设定之间要有逻辑自洽性${contextBlock(existing)}`
+4. 所有设定之间要有逻辑自洽性
+5. 若为 IP 改编：era_setting 必须以原作时代为基础进行扩展而非重新编造；power_structure 以原作势力为基础（如天庭、佛门、妖族等）可新增但不能矛盾；rules 延续原作力量体系和规则逻辑；social_atmosphere 还原原作的社会文化特征${contextBlock(existing)}`
 }
 
 function buildCharactersPrompt(userPrompt, existing) {
   return `你是一位角色塑造专家，擅长设计立体、有魅力、有记忆点的小说角色。请根据用户提示词和已有物料，设计完整的角色群像。
+${buildIPAwareHint(existing)}
 
 ${JSON_RULE}
 
@@ -250,12 +309,14 @@ JSON 结构：
 }
 
 要求：
-1. 至少 6 个角色：男主、女主、2个关键配角（亦友亦敌或双面人更好）、2个反派（不要脸谱化，给反派合理动机）
-2. 每个角色必须有独特的说话方式和行为模式，读者一看就能区分
-3. 角色间的欲望和秘密必须互相纠缠，制造天然冲突
-4. 男主不能是完美无缺的，弱点要真正影响剧情
-5. 反派要有令人共情甚至认同的一面
-6. 配角不是工具人，要有自己的目标线和成长弧${contextBlock(existing)}`
+1. 原创作品：至少 6 个角色（男主、女主、2配角、2反派）；IP 改编：以原作核心角色为主体（至少 4 个核心角色），可适当增加原创角色丰富故事
+2. IP 改编时：原作角色的 description 必须首先准确还原其经典形象特征（外貌、性格、能力、口头禅、标志性行为等），再叠加本作中的发展变化
+3. 每个角色必须有独特的说话方式和行为模式，IP 角色的言行必须符合原作人设
+4. 角色间的欲望和秘密必须互相纠缠，制造天然冲突
+5. 主角不能完美无缺，弱点要真正影响剧情
+6. 反派要有令人共情甚至认同的一面，不要脸谱化
+7. 配角不是工具人，要有自己的目标线和成长弧
+8. IP 改编时 role_type 按角色在本作中的实际定位分配，不必强套男主/女主模板（如《西游记》中可以孙悟空为 male_lead，唐僧为 supporting 等）${contextBlock(existing)}`
 }
 
 function buildRelationsPrompt(userPrompt, existing) {
@@ -268,6 +329,7 @@ function buildRelationsPrompt(userPrompt, existing) {
   const compactContext = existing ? buildCompactContext(existing) : ''
 
   return `你是一位人物关系架构师。基于已有角色设定构建人物关系网。
+${buildIPAwareHint(existing)}
 
 ⚠️ 重要：你返回的数据将直接被前端 dagre.js 渲染为有向关系脉络图（从上往下布局）。
 dagre.js 通过 from → to 的有向边来确定节点层级——如果边的方向没有形成层次关系，所有节点会被挤到同一行，图形完全无法阅读。
@@ -310,7 +372,8 @@ JSON 结构：
 1. 至少 8-12 条关系，确保每个角色至少有 2 条关系连线
 2. 关系要有灰色地带，包含至少 1 条"表里不一"的关系
 3. 利益链和情感链要具体
-4. from_name 和 to_name 必须与角色列表中的名字完全一致${charHint}${compactContext}`
+4. from_name 和 to_name 必须与角色列表中的名字完全一致
+5. IP 改编时：原作经典关系（如师徒、兄弟、对手等）必须保留其核心属性，可以增加新的关系维度和暗流涌动的利益纠葛，但不能扭曲原有关系本质${charHint}${compactContext}`
 }
 
 function buildCompactContext(existing) {
@@ -318,6 +381,11 @@ function buildCompactContext(existing) {
   const parts = []
   if (existing.basic_info) {
     parts.push(`书名: ${existing.basic_info.book_name || ''}, 类型: ${existing.basic_info.genre || ''}`)
+    const ip = existing.basic_info.ip_analysis
+    if (ip?.is_ip_based) {
+      const sources = Array.isArray(ip.source_works) ? ip.source_works.join('、') : ''
+      if (sources) parts.push(`IP来源: ${sources}`)
+    }
   }
   if (existing.characters?.length) {
     parts.push(`角色: ${existing.characters.map(c => `${c.name}(${c.role_type})`).join(', ')}`)
@@ -330,7 +398,8 @@ function buildCompactContext(existing) {
 }
 
 function buildPlotControlPrompt(userPrompt, existing) {
-  return `你是一位资深网文大纲编剧，擅长设计节奏紧凑、伏笔精妙、高潮迭起的剧情架构。请构建故事的核心剧情框架。
+  return `你是一位资深大纲编剧，擅长设计节奏紧凑、伏笔精妙、高潮迭起的剧情架构。请构建故事的核心剧情框架。
+${buildIPAwareHint(existing)}
 
 ${JSON_RULE}
 
@@ -347,11 +416,13 @@ JSON 结构：
 2. 每个转折点必须同时解决一个悬念又制造一个新悬念
 3. 要有至少一次"看似胜利实则失败"和一次"看似绝境实则转机"
 4. 剧情节奏必须考虑网文读者的阅读习惯：开局快节奏抓人、黄金三章、每30章一个小高潮
-5. 主线和角色弧线要紧密绑定，不能脱节${contextBlock(existing)}`
+5. 主线和角色弧线要紧密绑定，不能脱节
+6. IP 改编时：剧情必须衔接原作时间线，转折点要善于利用原作中已有的矛盾和伏笔进行再挖掘，同时融入用户要求的改编方向和现实映射主题${contextBlock(existing)}`
 }
 
 function buildVolumesPrompt(userPrompt, existing) {
-  return `你是一位精通网文节奏的分卷策划师。请基于已有的故事主线和角色设定，设计详细的分卷大纲。
+  return `你是一位精通小说节奏的分卷策划师。请基于已有的故事主线和角色设定，设计详细的分卷大纲。
+${buildIPAwareHint(existing)}
 
 ${JSON_RULE}
 
@@ -392,6 +463,7 @@ function buildWritingStylePrompt(userPrompt, existing) {
   const contextHint = parts.length ? `\n\n【已有物料摘要】\n${parts.join('\n')}` : ''
 
   return `你是一位文学风格顾问，请基于已有的小说策划物料，制定精确的写作风格控制方案。
+${buildIPAwareHint(existing)}
 
 ${JSON_RULE}
 
@@ -414,13 +486,23 @@ JSON 结构：
 
 // Legacy: full generation prompt (still used for single-call regen)
 export function buildFullGenerationPrompt(existingMaterial) {
-  let base = `你是一位专业的小说创作策划大师。用户会给你一段创作提示词，你需要基于提示词生成完整的小说策划物料。
+  let base = `你是一位专业的小说创作策划大师，拥有深厚的中外文学功底。用户会给你一段创作提示词，你需要基于提示词生成完整的小说策划物料。
+
+⚠️⚠️⚠️【第一优先级：IP 识别】
+分析用户提示词是否涉及已有经典 IP（文学/影视/游戏/神话/历史等作品）：
+- 出现经典人物名或作品名 → IP 改编：必须在 basic_info 中增加 ip_analysis 字段，忠实还原原作角色特征、世界观、时代背景，在此基础上进行改编创作
+- 仅涉及通用题材概念 → 原创：正常创作
+
+若为 IP 改编，basic_info 中必须包含：
+"ip_analysis": { "is_ip_based": true, "source_works": ["原作名"], "era_context": "原作时代与文化语境(200字以上)", "known_characters": ["角色名"], "character_traits_summary": "各角色原作特征速写(每人50字以上)", "original_elements": "用户的改编方向(200字以上)", "must_preserve": "必须保留的原作要素" }
+
+IP 改编铁律：原作角色保留经典性格和说话方式、世界观以原作为根基、时间线衔接原作、文化语境准确还原。
 
 ${JSON_RULE}
 
 JSON 结构如下:
 {
-  "basic_info": { "book_name": "", "genre": "", "style": "", "core_selling_point": "", "one_line_summary": "", "target_readers": "" },
+  "basic_info": { "ip_analysis": {}, "book_name": "", "genre": "", "style": "", "core_selling_point": "", "one_line_summary": "", "target_readers": "" },
   "world_building": { "era_setting": "", "power_structure": "", "rules": "", "social_atmosphere": "" },
   "characters": [{ "name": "", "role_type": "male_lead/female_lead/supporting/antagonist", "description": "", "core_desire": "", "weakness": "", "secret": "" }],
   "relations": [{ "from_name": "", "to_name": "", "relation_type": "", "faction": "", "interest_link": "", "emotion_link": "", "description": "" }],
@@ -429,7 +511,10 @@ JSON 结构如下:
   "writing_style": { "writing_style": "", "rhythm_requirement": "", "romance_ratio": "", "taboos": "", "red_lines": "" }
 }
 
-要求：characters至少6个角色，relations至少8条关系，volumes至少4卷。所有字段内容详细丰富。`
+要求：
+1. IP 改编时以原作核心角色为主体（至少4个），原创时至少6个角色；relations至少8条关系；volumes至少4卷
+2. 所有字段内容详细丰富
+3. IP 改编时角色、世界观、剧情必须忠于原作基底，在此之上融入用户的改编方向`
 
   if (existingMaterial && Object.keys(existingMaterial).length > 0) {
     base += `\n\n以下是当前项目已有的物料：\n${JSON.stringify(existingMaterial, null, 2)}`
@@ -488,7 +573,8 @@ export function buildChapterOutlinesPrompt(volume, material, existingChapters = 
 ${lines.join('\n')}`
   }
 
-  return `你是一位精通网文结构的章节策划师。请为指定卷生成详细的章节大纲。
+  return `你是一位精通小说结构的章节策划师。请为指定卷生成详细的章节大纲。
+${buildIPAwareHint(material)}
 
 ${JSON_RULE}
 
@@ -520,7 +606,8 @@ JSON 结构：
 4. 章节间要有节奏变化：紧张→舒缓→高潮交替
 5. 关键转折章要有铺垫章做准备
 6. 章节标题要有吸引力，不能是"第X章"这种流水账
-7. 新章节必须与已有章节保持剧情连贯，不能出现矛盾或重复`
+7. 新章节必须与已有章节保持剧情连贯，不能出现矛盾或重复
+8. IP 改编时：章节大纲中的事件和场景必须贴合原作世界观和角色性格，关键场景要利用原作的标志性元素营造代入感`
 }
 
 export function buildChapterContentPrompt(chapter, volume, material) {
@@ -539,7 +626,8 @@ export function buildChapterContentPrompt(chapter, volume, material) {
     parts.push(`【文风要求】${(ws.writing_style || '').slice(0, 200)}`)
   }
 
-  return `你是一位专业的网文作家。请根据章节大纲写出完整的章节正文。
+  return `你是一位专业的小说作家。请根据章节大纲写出完整的章节正文。
+${buildIPAwareHint(material)}
 
 ${parts.join('\n')}
 
@@ -566,5 +654,6 @@ JSON 结构：
 4. 描写要有画面感，五感结合
 5. 章末要有悬念或情感冲击，让读者想继续
 6. 段落长度适中，适合手机阅读
-7. 正文内容直接输出，不要加章节号标题前缀`
+7. 正文内容直接输出，不要加章节号标题前缀
+8. IP 改编时：角色对话必须符合原作人设和说话风格（如孙悟空的桀骜不驯、猪八戒的油滑世故等），场景描写要还原原作的时代氛围和文化特征`
 }
