@@ -48,7 +48,7 @@ auth.post('/login', async (c) => {
 auth.get('/profile', authMiddleware, async (c) => {
   const userId = c.get('userId')
   const [user] = await sql`
-    SELECT id, username, email, ai_api_url, ai_api_key, ai_model, created_at, updated_at
+    SELECT id, username, email, ai_api_url, ai_api_key, ai_model, ai_max_tokens, created_at, updated_at
     FROM users WHERE id = ${userId}
   `
   if (!user) return c.json({ error: '用户不存在' }, 404)
@@ -58,16 +58,19 @@ auth.get('/profile', authMiddleware, async (c) => {
 auth.put('/profile', authMiddleware, async (c) => {
   const userId = c.get('userId')
   const body = await c.req.json()
-  const { username, ai_api_url, ai_api_key, ai_model } = body
+  const { username, ai_api_url, ai_api_key, ai_model, ai_max_tokens } = body
+  // ai_max_tokens 为正整数或 null（null 表示使用默认值）
+  const maxTokensValue = ai_max_tokens ? parseInt(ai_max_tokens, 10) || null : null
   const [user] = await sql`
     UPDATE users SET
       username = COALESCE(${username || null}, username),
       ai_api_url = COALESCE(${ai_api_url ?? null}, ai_api_url),
       ai_api_key = COALESCE(${ai_api_key ?? null}, ai_api_key),
       ai_model = COALESCE(${ai_model ?? null}, ai_model),
+      ai_max_tokens = ${maxTokensValue},
       updated_at = NOW()
     WHERE id = ${userId}
-    RETURNING id, username, email, ai_api_url, ai_api_key, ai_model, created_at, updated_at
+    RETURNING id, username, email, ai_api_url, ai_api_key, ai_model, ai_max_tokens, created_at, updated_at
   `
   return c.json({ user })
 })

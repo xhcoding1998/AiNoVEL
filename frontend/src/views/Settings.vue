@@ -20,7 +20,8 @@ const form = ref({
   username: '',
   ai_api_url: '',
   ai_api_key: '',
-  ai_model: ''
+  ai_model: '',
+  ai_max_tokens: ''
 })
 const saving = ref(false)
 
@@ -31,7 +32,8 @@ onMounted(async () => {
       username: auth.user.username || '',
       ai_api_url: auth.user.ai_api_url || '',
       ai_api_key: auth.user.ai_api_key || '',
-      ai_model: auth.user.ai_model || ''
+      ai_model: auth.user.ai_model || '',
+      ai_max_tokens: auth.user.ai_max_tokens ? String(auth.user.ai_max_tokens) : ''
     }
   }
 })
@@ -111,6 +113,15 @@ async function save() {
           <VInput v-model="form.ai_api_url" label="API 地址" placeholder="https://api.openai.com/v1" />
           <VInput v-model="form.ai_api_key" label="API Key" type="password" placeholder="sk-..." />
           <VInput v-model="form.ai_model" label="模型" placeholder="gpt-4 / deepseek-chat / 本地模型" />
+          <div class="token-field">
+            <VInput
+              v-model="form.ai_max_tokens"
+              label="最大 Tokens 限制"
+              type="number"
+              placeholder="留空使用默认值（按场景自动调整）"
+            />
+            <span class="token-hint">控制每次 AI 请求的最大输出长度。留空则按不同生成场景自动使用合适的默认值（4096 ~ 128000）。建议根据所用模型的上下文窗口大小设置。</span>
+          </div>
         </div>
         <template #footer>
           <div class="settings-footer">
@@ -194,5 +205,17 @@ async function save() {
   border-color: var(--accent-blue);
   background: var(--accent-blue-subtle);
   color: var(--accent-blue);
+}
+
+.token-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.token-hint {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
 }
 </style>

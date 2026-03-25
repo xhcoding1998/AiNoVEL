@@ -18,7 +18,7 @@ async function verifyProjectOwner(c) {
 }
 
 async function getUserAIConfig(userId) {
-  const [user] = await sql`SELECT ai_api_url, ai_api_key, ai_model FROM users WHERE id = ${userId}`
+  const [user] = await sql`SELECT ai_api_url, ai_api_key, ai_model, ai_max_tokens FROM users WHERE id = ${userId}`
   return user
 }
 
@@ -214,7 +214,7 @@ ai.post('/:id/generate-single-item', async (c) => {
 
   const prompt = buildSingleItemPrompt(item_type, existingMaterial, context, user_data)
   try {
-    const result = await callAI(userConfig, prompt, context || '请生成一条新内容', { json_mode: true, max_tokens: 4096 })
+    const result = await callAI(userConfig, prompt, context || '请生成一条新内容', { json_mode: true, max_tokens: userConfig.ai_max_tokens || 4096 })
     const parsed = JSON.parse(result.trim().replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, ''))
     return c.json({ data: parsed })
   } catch (err) {
@@ -249,7 +249,7 @@ ${JSON_RULE}
 ${ctx}`
 
   try {
-    const result = await callAI(userConfig, prompt, '请生成叙事装置', { json_mode: true, max_tokens: 8192 })
+    const result = await callAI(userConfig, prompt, '请生成叙事装置', { json_mode: true, max_tokens: userConfig.ai_max_tokens || 8192 })
     const parsed = JSON.parse(result.trim().replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, ''))
 
     const devices = parsed.devices || parsed.plot_devices || []
@@ -486,7 +486,7 @@ async function processStepByStep(taskId, projectId, prompt, userConfig, startIdx
 
       const systemPrompt = buildStepPrompt(step, prompt, existingMaterial)
       const userPrompt = prompt || '请根据已有物料生成本部分内容'
-      const maxTokens = STEP_MAX_TOKENS[step] || 128000
+      const maxTokens = userConfig.ai_max_tokens || STEP_MAX_TOKENS[step] || 128000
       const chunker = createChunkLogger(projectId, taskId)
       const result = await callAI(userConfig, systemPrompt, userPrompt, {
         json_mode: true, max_tokens: maxTokens,
@@ -544,7 +544,7 @@ async function processSingleSection(taskId, projectId, section, prompt, userConf
     } else {
       userPrompt += '请基于项目原始创作方向和已有物料，重新生成该部分内容，确保与项目整体设定高度一致'
     }
-    const maxTokens = STEP_MAX_TOKENS[section] || 128000
+    const maxTokens = userConfig.ai_max_tokens || STEP_MAX_TOKENS[section] || 128000
     const chunker = createChunkLogger(projectId, taskId)
     const result = await callAI(userConfig, systemPrompt, userPrompt, {
       json_mode: true, max_tokens: maxTokens,
@@ -591,7 +591,7 @@ async function processChapterOutlines(taskId, projectId, volume, prompt, userCon
     const userPrompt = prompt || `请为第${volume.volume_number}卷生成章节大纲`
     const chunker = createChunkLogger(projectId, taskId)
     const result = await callAI(userConfig, systemPrompt, userPrompt, {
-      json_mode: true, max_tokens: 32768,
+      json_mode: true, max_tokens: userConfig.ai_max_tokens || 32768,
       onChunk: (t) => chunker.push(t)
     })
     await chunker.flush()
@@ -631,7 +631,7 @@ async function processChapterContent(taskId, projectId, chapter, volume, userCon
     const userPrompt = `请写出第${volume.volume_number}卷第${chapter.chapter_number}章「${chapter.title}」的完整正文`
     const chunker = createChunkLogger(projectId, taskId)
     const result = await callAI(userConfig, systemPrompt, userPrompt, {
-      json_mode: true, max_tokens: 16384,
+      json_mode: true, max_tokens: userConfig.ai_max_tokens || 16384,
       onChunk: (t) => chunker.push(t)
     })
     await chunker.flush()
