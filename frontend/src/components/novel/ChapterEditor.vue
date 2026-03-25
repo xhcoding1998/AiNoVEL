@@ -1199,21 +1199,26 @@ const totalWords = computed(() => {
   background: rgba(229, 62, 62, 0.08);
 }
 
-/* 页内编辑面板 */
+/* 页内编辑面板 —— 带卡片层次感 */
 .edit-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
 }
 
 .edit-panel__header {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding-bottom: 16px;
-  margin-bottom: 20px;
+  padding: 16px 24px;
+  background: var(--bg-elevated);
   border-bottom: 1px solid var(--border-default);
   flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .edit-panel__back {
@@ -1223,21 +1228,22 @@ const totalWords = computed(() => {
   font-size: 13px;
   color: var(--text-tertiary);
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 5px 10px;
   border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
   transition: all var(--transition-fast);
   background: none;
-  border: none;
   flex-shrink: 0;
 }
 
 .edit-panel__back:hover {
   color: var(--text-primary);
+  border-color: var(--border-hover);
   background: var(--bg-hover);
 }
 
 .edit-panel__title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   flex: 1;
   min-width: 0;
@@ -1255,6 +1261,9 @@ const totalWords = computed(() => {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
+  padding: 28px 24px;
+  max-width: 900px;
+  margin: 0 auto;
 }
 
 .edit-form-row {

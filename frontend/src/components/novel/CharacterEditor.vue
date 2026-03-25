@@ -415,21 +415,27 @@ async function aiGenerateChar() {
   -webkit-box-orient: vertical;
 }
 
-/* 编辑面板 */
+/* 编辑面板 —— 覆盖整个内容区，带卡片层次感 */
 .edit-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
+  /* 用轻微不同的背景色与页面区分 */
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
 }
 
 .edit-panel__header {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding-bottom: 16px;
-  margin-bottom: 20px;
+  padding: 16px 24px;
+  background: var(--bg-elevated);
   border-bottom: 1px solid var(--border-default);
   flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .edit-panel__back {
@@ -439,24 +445,26 @@ async function aiGenerateChar() {
   font-size: 13px;
   color: var(--text-tertiary);
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 5px 10px;
   border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
   transition: all var(--transition-fast);
   background: none;
-  border: none;
   flex-shrink: 0;
 }
 
 .edit-panel__back:hover {
   color: var(--text-primary);
+  border-color: var(--border-hover);
   background: var(--bg-hover);
 }
 
 .edit-panel__title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   flex: 1;
   min-width: 0;
+  margin: 0;
 }
 
 .edit-panel__actions {
@@ -467,14 +475,15 @@ async function aiGenerateChar() {
 }
 
 .edit-panel__body {
-  /* 无额外包裹，直接显示内容 */
+  padding: 28px 24px;
 }
 
 .edit-form-grid {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
-  max-width: 800px;
+  max-width: 760px;
+  margin: 0 auto;
 }
 
 .edit-form-row {
@@ -500,11 +509,12 @@ async function aiGenerateChar() {
 /* 面板切换动画 */
 .panel-slide-enter-active,
 .panel-slide-leave-active {
-  transition: opacity 0.15s ease;
+  transition: opacity 0.15s ease, transform 0.15s ease;
 }
 .panel-slide-enter-from,
 .panel-slide-leave-to {
   opacity: 0;
+  transform: translateY(6px);
 }
 .empty-text { color: var(--text-tertiary); text-align: center; padding: var(--space-10); font-size: 14px; }
 
