@@ -539,43 +539,37 @@ export function buildStoryboardPrompt(chapter, volume, material) {
     parts.push(`【世界观】${(material.world_building.era_setting || '').slice(0, 150)}`)
   }
   if (material.characters?.length) {
-    parts.push(`【主要角色】${material.characters.filter(c => ['male_lead','female_lead','antagonist'].includes(c.role_type)).map(c => `${c.name}(${c.role_type})：${(c.description || '').slice(0, 60)}`).join(' | ')}`)
+    parts.push(`【主要角色】${material.characters.filter(c => ['male_lead','female_lead','antagonist'].includes(c.role_type)).map(c => `${c.name}：${(c.image_prompt || c.description || '').slice(0, 80)}`).join('\n')}`)
   }
 
-  return `你是一位专业的影视分镜师，擅长将小说章节拆解为工业级视频分镜脚本。请将章节内容拆解为 3-8 个分镜镜头，每个镜头提供可直接用于 AI 视频生成的详细提示词。
+  return `你是一位专业的影视分镜导演，负责将小说章节改编为可直接交给 AI 视频模型执行的分镜脚本。
 
 ${parts.join('\n')}
 
 【卷信息】第${volume?.volume_number || ''}卷：${volume?.title || ''}
-【本章信息】第${chapter.chapter_number}章：${chapter.title || ''}
-【章节大纲】${chapter.outline || chapter.content?.slice(0, 300) || ''}
-【关键场景】${chapter.key_scenes || ''}
+【本章】第${chapter.chapter_number}章：${chapter.title || ''}
+【章节大纲】${chapter.outline || chapter.content?.slice(0, 400) || ''}
 
-${JSON_RULE}
+请生成 5-10 个分镜，每个分镜独占一段，格式严格如下（直接输出文本，不要 JSON，不要 markdown）：
 
-JSON 结构：
-{
-  "storyboards": [
-    {
-      "shot_number": 1,
-      "scene": "场景描述（50字内，说明发生了什么事件）",
-      "shot_type": "镜头类型（特写/近景/中景/全景/远景/航拍/主观视角）",
-      "camera_movement": "运镜方式（固定/推进/拉远/横移/跟随/环绕/俯冲）",
-      "characters": ["出场角色名"],
-      "prompt": "中文分镜提示词（150-300字，工业级格式，包含：①画面主体与动作 ②环境与氛围 ③光线与色调 ④镜头语言 ⑤情绪基调。要求具体可执行，能直接给 AI 视频模型使用）",
-      "duration": "建议时长（如：3-5秒）",
-      "emotion": "情绪基调（如：紧张/悲伤/震撼/温情/压抑）"
-    }
-  ]
-}
+【镜头1】3-5秒 | 全景 | 推进
+画面：清晨，长安城外官道，薄雾弥漫。玄奘身着白色僧袍，背负行囊，昂首向西而行。镜头从远处缓缓推进，人物由小变大，脚步坚定有力。
+光线：低角度晨光，逆光轮廓，金色光晕。
+氛围：孤独而壮阔，踏上未知征途的决绝感。
+
+【镜头2】2-4秒 | 特写 | 固定
+画面：玄奘回头，望向身后渐渐消失的长安城轮廓，眼神中有留恋，更有坚定。嘴角微微上扬，转身继续前行。
+光线：侧光，脸部明暗分明，突出面部情绪。
+氛围：告别与启程，内心的平静与坚定。
+
+以此类推，生成完整分镜脚本。
 
 要求：
-1. 分镜数量 3-8 个，根据章节内容的丰富程度决定
-2. 镜头顺序要符合叙事逻辑，有起承转合
-3. prompt 必须是中文，具体描述画面内容，不要抽象描述
-4. 镜头类型和运镜要有变化，不能全是同一种
-5. 重点场景（高潮、转折）要用更震撼的镜头语言
-6. 每个分镜的 prompt 要包含角色外貌、服装、动作、表情等具体细节`
+1. 每个镜头必须包含：时长、景别、运镜、画面描述、光线、氛围，缺一不可
+2. 画面描述要具体可执行，包含角色外貌/服装/动作/表情、环境细节、色调
+3. 景别和运镜要有变化（特写/近景/中景/全景/远景/航拍，固定/推进/拉远/横移/跟随/环绕）
+4. 镜头之间有叙事节奏，张弛有度，高潮处用震撼镜头
+5. 直接输出分镜文本，不要任何额外说明或前言`
 }
 
 // Legacy: full generation prompt (still used for single-call regen)

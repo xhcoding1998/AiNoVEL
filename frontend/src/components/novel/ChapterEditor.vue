@@ -43,16 +43,17 @@ const confirmDelete = ref({ show: false, type: '', target: null, deleting: false
 // 分镜相关
 const generatingStoryboardMap = ref({})  // chapterId -> boolean
 const expandedStoryboards = ref({})       // chapterId -> boolean
+const savingStoryboardMap = ref({})       // chapterId -> boolean
 
 async function generateStoryboards(ch) {
   generatingStoryboardMap.value[ch.id] = true
   try {
     const res = await aiApi.generateStoryboards(pid, ch.id)
-    const storyboards = res.data || []
+    const text = res.data || ''
     const idx = store.chapters.findIndex(c => c.id === ch.id)
-    if (idx !== -1) store.chapters[idx] = { ...store.chapters[idx], storyboards }
+    if (idx !== -1) store.chapters[idx] = { ...store.chapters[idx], storyboard_text: text }
     expandedStoryboards.value[ch.id] = true
-    toast.success(`已生成 ${storyboards.length} 个分镜`)
+    toast.success('分镜脚本已生成')
   } catch (err) {
     toast.error(err?.error || '分镜生成失败')
   } finally {
@@ -62,6 +63,18 @@ async function generateStoryboards(ch) {
 
 function toggleStoryboards(chId) {
   expandedStoryboards.value[chId] = !expandedStoryboards.value[chId]
+}
+
+async function saveStoryboard(ch) {
+  savingStoryboardMap.value[ch.id] = true
+  try {
+    await aiApi.saveStoryboards(pid, ch.id, ch.storyboard_text || '')
+    toast.success('分镜已保存')
+  } catch {
+    toast.error('保存失败')
+  } finally {
+    savingStoryboardMap.value[ch.id] = false
+  }
 }
 
 function emptyVolForm() {
@@ -610,7 +623,7 @@ const totalWords = computed(() => {
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="flex-shrink:0">
                     <rect x="1" y="3" width="9" height="7" rx="1"/><path d="M10 6.5l4-2v5l-4-2v-1z" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
-                  分镜
+                  AI 写分镜
                 </VButton>
                 <button v-if="!isChapterGenerating(ch.id)" class="chapter-item__edit" @click.stop="openEdit(ch)" title="编辑">
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3">
@@ -626,28 +639,30 @@ const totalWords = computed(() => {
             </div>
 
             <!-- 分镜展示区 -->
-            <div
-              v-if="ch.storyboards && ch.storyboards.length"
-              class="storyboard-section"
-            >
+            <div v-if="ch.storyboard_text" class="storyboard-section">
               <button class="storyboard-toggle" @click.stop="toggleStoryboards(ch.id)">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4"
                   :style="{ transform: expandedStoryboards[ch.id] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }">
                   <path d="M2 4l4 4 4-4" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
-                分镜脚本（{{ ch.storyboards.length }} 个镜头）
+                分镜脚本
               </button>
-              <div v-if="expandedStoryboards[ch.id]" class="storyboard-list">
-                <div v-for="shot in ch.storyboards" :key="shot.shot_number" class="storyboard-shot">
-                  <div class="storyboard-shot__header">
-                    <span class="storyboard-shot__num">镜头 {{ shot.shot_number }}</span>
-                    <span class="storyboard-shot__type">{{ shot.shot_type }}</span>
-                    <span v-if="shot.camera_movement" class="storyboard-shot__move">{{ shot.camera_movement }}</span>
-                    <span v-if="shot.duration" class="storyboard-shot__dur">{{ shot.duration }}</span>
-                    <span v-if="shot.emotion" class="storyboard-shot__emotion">{{ shot.emotion }}</span>
-                  </div>
-                  <p class="storyboard-shot__scene">{{ shot.scene }}</p>
-                  <p class="storyboard-shot__prompt">{{ shot.prompt }}</p>
+              <div v-if="expandedStoryboards[ch.id]" class="storyboard-editor">
+                <textarea
+                  class="storyboard-textarea"
+                  v-model="ch.storyboard_text"
+                  @click.stop
+                  rows="12"
+                  placeholder="分镜脚本内容..."
+                />
+                <div class="storyboard-editor__footer">
+                  <button
+                    class="storyboard-save-btn"
+                    :disabled="savingStoryboardMap[ch.id]"
+                    @click.stop="saveStoryboard(ch)"
+                  >
+                    {{ savingStoryboardMap[ch.id] ? '保存中...' : '保存' }}
+                  </button>
                 </div>
               </div>
             </div>
@@ -1224,64 +1239,60 @@ const totalWords = computed(() => {
   color: var(--text-primary);
 }
 
-.storyboard-list {
+.storyboard-editor {
+  margin-top: 8px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-top: 10px;
+  gap: 6px;
 }
 
-.storyboard-shot {
-  background: var(--bg-secondary);
+.storyboard-textarea {
+  width: 100%;
+  min-height: 200px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-primary);
+  background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  padding: 10px 12px;
-}
-
-.storyboard-shot__header {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-
-.storyboard-shot__num {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--accent-blue);
-  background: rgba(var(--accent-blue-rgb, 59, 130, 246), 0.1);
-  padding: 2px 8px;
-  border-radius: 20px;
-}
-
-.storyboard-shot__type,
-.storyboard-shot__move,
-.storyboard-shot__dur,
-.storyboard-shot__emotion {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  background: var(--bg-hover);
-  padding: 2px 7px;
-  border-radius: 20px;
-}
-
-.storyboard-shot__emotion {
-  color: var(--accent-orange, #ed8936);
-}
-
-.storyboard-shot__scene {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin: 0 0 6px;
-  font-weight: 500;
-}
-
-.storyboard-shot__prompt {
-  font-size: 12px;
-  color: var(--text-primary);
-  line-height: 1.6;
-  margin: 0;
+  resize: vertical;
+  font-family: var(--font-mono);
   white-space: pre-wrap;
+  box-sizing: border-box;
+  transition: border-color var(--transition-fast);
+}
+
+.storyboard-textarea:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+}
+
+.storyboard-editor__footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.storyboard-save-btn {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.storyboard-save-btn:hover:not(:disabled) {
+  background: var(--accent-blue);
+  color: #fff;
+  border-color: var(--accent-blue);
+}
+
+.storyboard-save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>

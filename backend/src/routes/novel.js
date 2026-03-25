@@ -328,15 +328,15 @@ novel.put('/:id/writing-style', async (c) => {
   return c.json({ data })
 })
 
-// --- Chapter Storyboards ---
+// --- Chapter Storyboard Text ---
 novel.put('/:id/chapters/:cid/storyboards', async (c) => {
   const pid = await verifyProjectOwner(c)
   if (!pid) return c.json({ error: '项目不存在' }, 404)
   const cid = c.req.param('cid')
-  const { storyboards } = await c.req.json()
+  const { storyboard_text } = await c.req.json()
   const [data] = await sql`
-    UPDATE chapters SET storyboards = ${JSON.stringify(storyboards || [])}::jsonb, updated_at = NOW()
-    WHERE id = ${cid} AND project_id = ${pid} RETURNING id, storyboards
+    UPDATE chapters SET storyboard_text = ${storyboard_text || ''}, updated_at = NOW()
+    WHERE id = ${cid} AND project_id = ${pid} RETURNING id, storyboard_text
   `
   if (!data) return c.json({ error: '章节不存在' }, 404)
   return c.json({ data })

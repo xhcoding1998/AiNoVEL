@@ -386,18 +386,16 @@ ai.post('/:id/generate-storyboards', async (c) => {
   } catch { /* ignore */ }
 
   const systemPrompt = buildStoryboardPrompt(chapter, volume, material)
-  const userPrompt = `请为第${volume?.volume_number || ''}卷第${chapter.chapter_number}章「${chapter.title}」生成分镜`
+  const userPrompt = `请为第${volume?.volume_number || ''}卷第${chapter.chapter_number}章「${chapter.title}」生成分镜脚本`
 
   try {
-    const result = await callAI(storyboardConfig, systemPrompt, userPrompt, {
-      json_mode: true,
-      max_tokens: storyboardConfig.ai_max_tokens || 8192
+    const text = await callAI(storyboardConfig, systemPrompt, userPrompt, {
+      max_tokens: storyboardConfig.ai_max_tokens || 4096
     })
-    const parsed = JSON.parse(result.trim().replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, ''))
-    const storyboards = parsed.storyboards || []
+    const storyboardText = text.trim()
 
-    await sql`UPDATE chapters SET storyboards = ${JSON.stringify(storyboards)}::jsonb, updated_at = NOW() WHERE id = ${chapter_id}`
-    return c.json({ data: storyboards })
+    await sql`UPDATE chapters SET storyboard_text = ${storyboardText}, updated_at = NOW() WHERE id = ${chapter_id}`
+    return c.json({ data: storyboardText })
   } catch (err) {
     return c.json({ error: err.message || '分镜生成失败' }, 500)
   }
