@@ -27,11 +27,13 @@ const regenPrompt = ref('')
 const regenerating = ref(false)
 
 const dataVersion = ref(0)
+const generationKey = ref(0)
 const sectionCompleteCallback = ref(null)
 provide('dataVersion', dataVersion)
 provide('refreshParentStatus', () => checkStatus())
 provide('startParentPolling', (onComplete) => {
   sectionCompleteCallback.value = onComplete || null
+  generationKey.value++
   genStatus.value = 'generating'
   startPolling()
 })
@@ -148,6 +150,7 @@ async function handleStop() {
 async function handleContinue() {
   try {
     await aiApi.continueGeneration(route.params.id)
+    generationKey.value++
     genStatus.value = 'generating'
     startPolling()
     toast.info('正在从断点继续生成...')
@@ -164,6 +167,7 @@ async function regenerateAll() {
   regenerating.value = true
   try {
     await aiApi.generateAll(route.params.id, regenPrompt.value.trim())
+    generationKey.value++
     genStatus.value = 'generating'
     showRegenModal.value = false
     regenPrompt.value = ''
@@ -231,6 +235,7 @@ watch(() => route.params.id, async (id) => {
         :steps="allSteps"
         :step-labels="stepLabels"
         :project-id="route.params.id"
+        :generation-key="generationKey"
         @continue="handleContinue"
         @stop="handleStop"
         @regenerate="showRegenModal = true"

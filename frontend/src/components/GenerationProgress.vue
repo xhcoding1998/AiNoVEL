@@ -8,7 +8,8 @@ const props = defineProps({
   completedSteps: { type: Array, default: () => [] },
   steps: { type: Array, default: () => [] },
   stepLabels: { type: Object, default: () => ({}) },
-  projectId: { type: [String, Number], default: null }
+  projectId: { type: [String, Number], default: null },
+  generationKey: { type: Number, default: 0 }
 })
 
 const emit = defineEmits(['continue', 'regenerate', 'stop'])
@@ -115,6 +116,7 @@ function getStepState(step) {
         </div>
         <GenerationLog
           v-if="projectId && (status === 'generating' || status === 'failed')"
+          :key="generationKey"
           :project-id="projectId"
           :active="status === 'generating'"
           :status="status"

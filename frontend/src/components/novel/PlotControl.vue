@@ -333,7 +333,7 @@ const tabs = [{ label: '故事主线', value: 'storyline' }, { label: '分卷大
 
     <VConfirmModal
       v-model="showCascadeModal"
-      title="是否重新生成后续内容？"
+      title="是否重新生成当前内容？"
       confirm-text="重新生成后续"
       cancel-text="跳过"
       confirm-variant="primary"
@@ -342,7 +342,7 @@ const tabs = [{ label: '故事主线', value: 'storyline' }, { label: '分卷大
       @confirm="confirmCascade"
       @cancel="cancelCascade"
     >
-      <p>你修改了「{{ cascadeStepLabel }}」，后续内容依赖此信息。建议重新生成以保持一致性，也可跳过稍后手动处理。</p>
+      <p>你修改了「{{ cascadeStepLabel }}」，是否立即重新生成该部分内容？也可跳过稍后手动处理。</p>
     </VConfirmModal>
   </div>
 </template>

@@ -28,10 +28,7 @@ export function useCascadeRegenerate() {
   const cascadeCallback = ref(null)
 
   const cascadeAffectedSteps = computed(() => {
-    if (!cascadeStep.value) return []
-    const idx = GENERATION_STEPS.indexOf(cascadeStep.value)
-    if (idx === -1 || idx >= GENERATION_STEPS.length - 1) return []
-    return GENERATION_STEPS.slice(idx + 1).map(s => STEP_LABELS[s])
+    return []
   })
 
   const cascadeStepLabel = computed(() => {
@@ -59,15 +56,15 @@ export function useCascadeRegenerate() {
   async function confirmCascade() {
     cascadeLoading.value = true
     try {
-      await aiApi.regenerateFrom(cascadeProjectId.value, cascadeStep.value)
+      await aiApi.generateSection(cascadeProjectId.value, cascadeStep.value)
       showCascadeModal.value = false
-      toast.info('正在重新生成后续内容...')
+      toast.info('正在重新生成...')
 
       if (startParentPolling) {
         startParentPolling(cascadeCallback.value)
       }
     } catch (err) {
-      toast.error(err?.error || '启动级联重新生成失败')
+      toast.error(err?.error || '启动重新生成失败')
     } finally {
       cascadeLoading.value = false
     }
