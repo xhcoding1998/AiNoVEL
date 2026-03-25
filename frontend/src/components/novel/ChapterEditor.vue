@@ -40,6 +40,30 @@ const volForm = ref(emptyVolForm())
 
 const confirmDelete = ref({ show: false, type: '', target: null, deleting: false })
 
+// 分镜相关
+const generatingStoryboardMap = ref({})  // chapterId -> boolean
+const expandedStoryboards = ref({})       // chapterId -> boolean
+
+async function generateStoryboards(ch) {
+  generatingStoryboardMap.value[ch.id] = true
+  try {
+    const res = await aiApi.generateStoryboards(pid, ch.id)
+    const storyboards = res.data || []
+    const idx = store.chapters.findIndex(c => c.id === ch.id)
+    if (idx !== -1) store.chapters[idx] = { ...store.chapters[idx], storyboards }
+    expandedStoryboards.value[ch.id] = true
+    toast.success(`已生成 ${storyboards.length} 个分镜`)
+  } catch (err) {
+    toast.error(err?.error || '分镜生成失败')
+  } finally {
+    generatingStoryboardMap.value[ch.id] = false
+  }
+}
+
+function toggleStoryboards(chId) {
+  expandedStoryboards.value[chId] = !expandedStoryboards.value[chId]
+}
+
 function emptyVolForm() {
   return { id: null, volume_number: (store.volumes.length || 0) + 1, title: '', goal: '', summary: '' }
 }
@@ -572,6 +596,20 @@ const totalWords = computed(() => {
                 >
                   生成中...
                 </VButton>
+                <VButton
+                  v-if="!isChapterGenerating(ch.id)"
+                  variant="ghost"
+                  size="sm"
+                  :loading="generatingStoryboardMap[ch.id]"
+                  :disabled="hasAnyGenerating && !generatingStoryboardMap[ch.id]"
+                  @click.stop="generateStoryboards(ch)"
+                  title="AI 生成分镜"
+                >
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="flex-shrink:0">
+                    <rect x="1" y="3" width="9" height="7" rx="1"/><path d="M10 6.5l4-2v5l-4-2v-1z" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  分镜
+                </VButton>
                 <button v-if="!isChapterGenerating(ch.id)" class="chapter-item__edit" @click.stop="openEdit(ch)" title="编辑">
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3">
                     <path d="M8.5 2.5l3 3M2 9l6-6 3 3-6 6H2V9z" stroke-linecap="round" stroke-linejoin="round"/>
@@ -582,6 +620,33 @@ const totalWords = computed(() => {
                     <path d="M4 4l8 8M12 4l-8 8" stroke-linecap="round"/>
                   </svg>
                 </button>
+              </div>
+            </div>
+
+            <!-- 分镜展示区 -->
+            <div
+              v-if="ch.storyboards && ch.storyboards.length"
+              class="storyboard-section"
+            >
+              <button class="storyboard-toggle" @click.stop="toggleStoryboards(ch.id)">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4"
+                  :style="{ transform: expandedStoryboards[ch.id] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }">
+                  <path d="M2 4l4 4 4-4" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                分镜脚本（{{ ch.storyboards.length }} 个镜头）
+              </button>
+              <div v-if="expandedStoryboards[ch.id]" class="storyboard-list">
+                <div v-for="shot in ch.storyboards" :key="shot.shot_number" class="storyboard-shot">
+                  <div class="storyboard-shot__header">
+                    <span class="storyboard-shot__num">镜头 {{ shot.shot_number }}</span>
+                    <span class="storyboard-shot__type">{{ shot.shot_type }}</span>
+                    <span v-if="shot.camera_movement" class="storyboard-shot__move">{{ shot.camera_movement }}</span>
+                    <span v-if="shot.duration" class="storyboard-shot__dur">{{ shot.duration }}</span>
+                    <span v-if="shot.emotion" class="storyboard-shot__emotion">{{ shot.emotion }}</span>
+                  </div>
+                  <p class="storyboard-shot__scene">{{ shot.scene }}</p>
+                  <p class="storyboard-shot__prompt">{{ shot.prompt }}</p>
+                </div>
               </div>
             </div>
           </div>
@@ -1100,5 +1165,90 @@ const totalWords = computed(() => {
   text-align: center;
   padding: 32px 0;
   font-size: 13px;
+}
+
+/* 分镜区域 */
+.storyboard-section {
+  border-top: 1px solid var(--border-color);
+  margin-top: 10px;
+  padding-top: 8px;
+}
+
+.storyboard-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 2px 0;
+  background: none;
+  border: none;
+  transition: color var(--transition-fast);
+}
+
+.storyboard-toggle:hover {
+  color: var(--text-primary);
+}
+
+.storyboard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.storyboard-shot {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+}
+
+.storyboard-shot__header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.storyboard-shot__num {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-blue);
+  background: rgba(var(--accent-blue-rgb, 59, 130, 246), 0.1);
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+
+.storyboard-shot__type,
+.storyboard-shot__move,
+.storyboard-shot__dur,
+.storyboard-shot__emotion {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  background: var(--bg-hover);
+  padding: 2px 7px;
+  border-radius: 20px;
+}
+
+.storyboard-shot__emotion {
+  color: var(--accent-orange, #ed8936);
+}
+
+.storyboard-shot__scene {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0 0 6px;
+  font-weight: 500;
+}
+
+.storyboard-shot__prompt {
+  font-size: 12px;
+  color: var(--text-primary);
+  line-height: 1.6;
+  margin: 0;
+  white-space: pre-wrap;
 }
 </style>

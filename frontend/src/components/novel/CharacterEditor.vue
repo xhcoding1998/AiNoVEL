@@ -51,7 +51,7 @@ const roleLabelMap = { male_lead: '男主', female_lead: '女主', supporting: '
 const roleVariantMap = { male_lead: 'info', female_lead: 'purple', supporting: 'default', antagonist: 'danger', minor: 'warning' }
 
 function emptyForm() {
-  return { id: null, name: '', role_type: 'supporting', description: '', core_desire: '', weakness: '', secret: '', avatar_color: '#333' }
+  return { id: null, name: '', role_type: 'supporting', description: '', core_desire: '', weakness: '', secret: '', image_prompt: '', avatar_color: '#333' }
 }
 
 async function loadData() {
@@ -130,6 +130,7 @@ async function aiGenerateChar() {
       editForm.value.core_desire = data.core_desire || form.core_desire || ''
       editForm.value.weakness = data.weakness || form.weakness || ''
       editForm.value.secret = data.secret || form.secret || ''
+      editForm.value.image_prompt = data.image_prompt || form.image_prompt || ''
     } else {
       editForm.value.name = data.name || editForm.value.name
       editForm.value.role_type = data.role_type || editForm.value.role_type
@@ -137,6 +138,7 @@ async function aiGenerateChar() {
       editForm.value.core_desire = data.core_desire || ''
       editForm.value.weakness = data.weakness || ''
       editForm.value.secret = data.secret || ''
+      editForm.value.image_prompt = data.image_prompt || ''
     }
     toast.success(hasAnyInput ? 'AI 已基于你的输入补充完善，请检查后保存' : 'AI 已生成角色内容，请检查后保存')
   } catch (err) {
@@ -190,6 +192,9 @@ async function aiGenerateChar() {
           <p v-if="char.core_desire" class="char-card__tag">
             <span class="char-card__tag-label">欲望</span>{{ char.core_desire }}
           </p>
+          <p v-if="char.image_prompt" class="char-card__tag char-card__tag--image">
+            <span class="char-card__tag-label">形象</span>{{ char.image_prompt }}
+          </p>
         </div>
       </VCard>
     </div>
@@ -205,6 +210,7 @@ async function aiGenerateChar() {
         <VTextarea v-model="editForm.core_desire" label="核心欲望" placeholder="这个角色最想要什么？" :rows="2" />
         <VTextarea v-model="editForm.weakness" label="弱点" placeholder="性格/能力上的致命弱点" :rows="2" />
         <VTextarea v-model="editForm.secret" label="秘密" placeholder="不为人知的秘密" :rows="2" />
+        <VTextarea v-model="editForm.image_prompt" label="形象提示词" placeholder="AI 绘图/视频用的角色外貌描述，如：约25岁男性，身着白色僧袍，面容清秀温和，眉心有舍利子印记..." :rows="3" />
       </div>
       <template #footer>
         <div class="modal-footer-full">
@@ -373,6 +379,17 @@ async function aiGenerateChar() {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+}
+
+.char-card__tag--image .char-card__tag-label {
+  color: var(--accent-green);
+}
+
+.char-card__tag--image {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .form-grid { display: flex; flex-direction: column; gap: var(--space-4); }

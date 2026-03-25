@@ -158,10 +158,10 @@ async function saveCharacters(projectId, characters) {
   for (let i = 0; i < characters.length; i++) {
     const c = characters[i]
     const [row] = await sql`INSERT INTO characters
-      (project_id, name, role_type, description, core_desire, weakness, secret, avatar_color)
+      (project_id, name, role_type, description, core_desire, weakness, secret, avatar_color, image_prompt)
       VALUES (${projectId}, ${c.name || '未命名'}, ${c.role_type || 'supporting'},
         ${c.description || ''}, ${c.core_desire || ''}, ${c.weakness || ''},
-        ${c.secret || ''}, ${pickColor(i)})
+        ${c.secret || ''}, ${pickColor(i)}, ${c.image_prompt || ''})
       RETURNING id`
     nameToId[c.name] = row.id
   }

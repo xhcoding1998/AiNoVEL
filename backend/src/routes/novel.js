@@ -73,10 +73,10 @@ novel.post('/:id/characters', async (c) => {
   if (!pid) return c.json({ error: '项目不存在' }, 404)
   const body = await c.req.json()
   const [data] = await sql`
-    INSERT INTO characters (project_id, name, role_type, description, core_desire, weakness, secret, avatar_color)
+    INSERT INTO characters (project_id, name, role_type, description, core_desire, weakness, secret, avatar_color, image_prompt)
     VALUES (${pid}, ${body.name || '未命名'}, ${body.role_type || 'supporting'},
       ${body.description || ''}, ${body.core_desire || ''}, ${body.weakness || ''},
-      ${body.secret || ''}, ${body.avatar_color || '#0070f3'})
+      ${body.secret || ''}, ${body.avatar_color || '#0070f3'}, ${body.image_prompt || ''})
     RETURNING *
   `
   return c.json({ data })
@@ -92,7 +92,9 @@ novel.put('/:id/characters/:cid', async (c) => {
       name = ${body.name || '未命名'}, role_type = ${body.role_type || 'supporting'},
       description = ${body.description || ''}, core_desire = ${body.core_desire || ''},
       weakness = ${body.weakness || ''}, secret = ${body.secret || ''},
-      avatar_color = ${body.avatar_color || '#0070f3'}, updated_at = NOW()
+      avatar_color = ${body.avatar_color || '#0070f3'},
+      image_prompt = ${body.image_prompt || ''},
+      updated_at = NOW()
     WHERE id = ${cid} AND project_id = ${pid} RETURNING *
   `
   if (!data) return c.json({ error: '角色不存在' }, 404)
@@ -323,6 +325,20 @@ novel.put('/:id/writing-style', async (c) => {
       updated_at = NOW()
     WHERE project_id = ${pid} RETURNING *
   `
+  return c.json({ data })
+})
+
+// --- Chapter Storyboards ---
+novel.put('/:id/chapters/:cid/storyboards', async (c) => {
+  const pid = await verifyProjectOwner(c)
+  if (!pid) return c.json({ error: '项目不存在' }, 404)
+  const cid = c.req.param('cid')
+  const { storyboards } = await c.req.json()
+  const [data] = await sql`
+    UPDATE chapters SET storyboards = ${JSON.stringify(storyboards || [])}::jsonb, updated_at = NOW()
+    WHERE id = ${cid} AND project_id = ${pid} RETURNING id, storyboards
+  `
+  if (!data) return c.json({ error: '章节不存在' }, 404)
   return c.json({ data })
 })
 

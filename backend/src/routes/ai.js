@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import sql from '../db/index.js'
 import { authMiddleware } from '../middleware/auth.js'
 import { compileMaterial } from '../services/material.js'
-import { callAI, buildStepPrompt, buildChapterOutlinesPrompt, buildChapterContentPrompt, contextBlock, GENERATION_STEPS, STEP_LABELS } from '../services/ai.js'
+import { callAI, buildStepPrompt, buildChapterOutlinesPrompt, buildChapterContentPrompt, buildStoryboardPrompt, contextBlock, GENERATION_STEPS, STEP_LABELS } from '../services/ai.js'
 import { parseAndSaveSection } from '../services/parser.js'
 
 const ai = new Hono()
@@ -354,6 +354,55 @@ ai.post('/:id/generate-chapter-content', async (c) => {
   return c.json({ data: task })
 })
 
+// Generate storyboards for a chapter
+ai.post('/:id/generate-storyboards', async (c) => {
+  const pid = await verifyProjectOwner(c)
+  if (!pid) return c.json({ error: '项目不存在' }, 404)
+
+  const { chapter_id } = await c.req.json()
+  if (!chapter_id) return c.json({ error: '请指定章节' }, 400)
+
+  const [chapter] = await sql`SELECT * FROM chapters WHERE id = ${chapter_id} AND project_id = ${pid}`
+  if (!chapter) return c.json({ error: '章节不存在' }, 404)
+
+  const [volume] = await sql`SELECT * FROM volumes WHERE id = ${chapter.volume_id}`
+
+  const userId = c.get('userId')
+  const [user] = await sql`SELECT ai_api_url, ai_api_key, ai_model, ai_max_tokens,
+    storyboard_api_url, storyboard_api_key, storyboard_model FROM users WHERE id = ${userId}`
+
+  // 优先用分镜接口，没配置则降级到文本接口
+  const storyboardConfig = {
+    ai_api_url: user.storyboard_api_url || user.ai_api_url,
+    ai_api_key: user.storyboard_api_key || user.ai_api_key,
+    ai_model: user.storyboard_model || user.ai_model,
+    ai_max_tokens: user.ai_max_tokens
+  }
+
+  let material = {}
+  try {
+    const [latest] = await sql`SELECT content FROM materials WHERE project_id = ${pid} ORDER BY version DESC LIMIT 1`
+    if (latest) material = latest.content
+  } catch { /* ignore */ }
+
+  const systemPrompt = buildStoryboardPrompt(chapter, volume, material)
+  const userPrompt = `请为第${volume?.volume_number || ''}卷第${chapter.chapter_number}章「${chapter.title}」生成分镜`
+
+  try {
+    const result = await callAI(storyboardConfig, systemPrompt, userPrompt, {
+      json_mode: true,
+      max_tokens: storyboardConfig.ai_max_tokens || 8192
+    })
+    const parsed = JSON.parse(result.trim().replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, ''))
+    const storyboards = parsed.storyboards || []
+
+    await sql`UPDATE chapters SET storyboards = ${JSON.stringify(storyboards)}::jsonb, updated_at = NOW() WHERE id = ${chapter_id}`
+    return c.json({ data: storyboards })
+  } catch (err) {
+    return c.json({ error: err.message || '分镜生成失败' }, 500)
+  }
+})
+
 // Preview: get all volumes with chapters
 ai.get('/:id/preview', async (c) => {
   const pid = await verifyProjectOwner(c)
@@ -605,7 +654,7 @@ async function processChapterOutlines(taskId, projectId, volume, prompt, userCon
       const outline = [ch.outline || '', ch.key_scenes ? `【关键场景】${ch.key_scenes}` : ''].filter(Boolean).join('\n')
       await sql`INSERT INTO chapters (project_id, volume_id, chapter_number, title, content, status, word_count)
         VALUES (${projectId}, ${volume.id}, ${ch.chapter_number || 1}, ${ch.title || ''},
-          ${outline}, 'draft', ${ch.word_target || 3000})`
+          ${outline}, 'draft', 0)`
     }
 
     await writeLog(projectId, taskId, 'success', `第${volume.volume_number}卷章节大纲生成完成，共 ${chapters.length} 章`)
@@ -745,7 +794,7 @@ function buildSingleItemPrompt(itemType, existingMaterial, userContext, userData
     const filledFields = []
     const emptyFields = []
     if (hasUserData) {
-      const fieldLabels = { name: '角色名', role_type: '角色类型', description: '角色描述', core_desire: '核心欲望', weakness: '弱点', secret: '秘密' }
+      const fieldLabels = { name: '角色名', role_type: '角色类型', description: '角色描述', core_desire: '核心欲望', weakness: '弱点', secret: '秘密', image_prompt: '形象提示词' }
       for (const [key, label] of Object.entries(fieldLabels)) {
         const val = userData[key]
         if (val && String(val).trim() && key !== 'id' && key !== 'avatar_color') {
@@ -787,7 +836,8 @@ JSON 结构：
   "description": "角色详述（150字以上，包括外貌、性格、出身、技能）",
   "core_desire": "核心欲望（50字以上）",
   "weakness": "致命弱点（50字以上）",
-  "secret": "核心秘密（50字以上）"
+  "secret": "核心秘密（50字以上）",
+  "image_prompt": "角色形象提示词（中文，80-150字，含外貌/服装/气质，可直接用于AI绘图/视频生成）"
 }
 
 要求：

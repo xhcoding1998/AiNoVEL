@@ -346,7 +346,8 @@ JSON 结构：
       "description": "角色详述（300字以上，包括：①外貌特征（辨识度高的细节） ②性格核心（用MBTI或关键词概括+展开） ③出身背景 ④技能/能力特长 ⑤标志性行为习惯或口头禅）",
       "core_desire": "核心欲望（100字以上，不是表面目标而是深层心理需求，如'不是想变强，而是恐惧再次失去'）",
       "weakness": "致命弱点（100字以上，必须是真正能造成困境的弱点，而非无关痛痒的小毛病。包括：弱点来源、如何被敌人利用、对剧情的影响）",
-      "secret": "核心秘密（100字以上，一个能在关键时刻引爆剧情的秘密，包括：秘密的来龙去脉、谁知道这个秘密、暴露后的冲击力）"
+      "secret": "核心秘密（100字以上，一个能在关键时刻引爆剧情的秘密，包括：秘密的来龙去脉、谁知道这个秘密、暴露后的冲击力）",
+      "image_prompt": "角色形象提示词（中文，100-200字，专为AI绘图/视频生成设计，包含：①年龄与性别 ②面部特征（五官、肤色、发型发色） ③身材与体型 ④标志性服装与配饰 ⑤气质与神态。要求具体可视化，能直接用于生成角色立绘）"
     }
   ]
 }
@@ -527,6 +528,56 @@ JSON 结构：
 3. 禁忌和红线要实际可操作${contextHint}`
 }
 
+// ---------- Storyboard prompt ----------
+
+export function buildStoryboardPrompt(chapter, volume, material) {
+  const parts = []
+  if (material.basic_info) {
+    parts.push(`【书名】${material.basic_info.book_name || ''}  【类型】${material.basic_info.genre || ''}  【风格】${material.basic_info.style || ''}`)
+  }
+  if (material.world_building?.era_setting) {
+    parts.push(`【世界观】${(material.world_building.era_setting || '').slice(0, 150)}`)
+  }
+  if (material.characters?.length) {
+    parts.push(`【主要角色】${material.characters.filter(c => ['male_lead','female_lead','antagonist'].includes(c.role_type)).map(c => `${c.name}(${c.role_type})：${(c.description || '').slice(0, 60)}`).join(' | ')}`)
+  }
+
+  return `你是一位专业的影视分镜师，擅长将小说章节拆解为工业级视频分镜脚本。请将章节内容拆解为 3-8 个分镜镜头，每个镜头提供可直接用于 AI 视频生成的详细提示词。
+
+${parts.join('\n')}
+
+【卷信息】第${volume?.volume_number || ''}卷：${volume?.title || ''}
+【本章信息】第${chapter.chapter_number}章：${chapter.title || ''}
+【章节大纲】${chapter.outline || chapter.content?.slice(0, 300) || ''}
+【关键场景】${chapter.key_scenes || ''}
+
+${JSON_RULE}
+
+JSON 结构：
+{
+  "storyboards": [
+    {
+      "shot_number": 1,
+      "scene": "场景描述（50字内，说明发生了什么事件）",
+      "shot_type": "镜头类型（特写/近景/中景/全景/远景/航拍/主观视角）",
+      "camera_movement": "运镜方式（固定/推进/拉远/横移/跟随/环绕/俯冲）",
+      "characters": ["出场角色名"],
+      "prompt": "中文分镜提示词（150-300字，工业级格式，包含：①画面主体与动作 ②环境与氛围 ③光线与色调 ④镜头语言 ⑤情绪基调。要求具体可执行，能直接给 AI 视频模型使用）",
+      "duration": "建议时长（如：3-5秒）",
+      "emotion": "情绪基调（如：紧张/悲伤/震撼/温情/压抑）"
+    }
+  ]
+}
+
+要求：
+1. 分镜数量 3-8 个，根据章节内容的丰富程度决定
+2. 镜头顺序要符合叙事逻辑，有起承转合
+3. prompt 必须是中文，具体描述画面内容，不要抽象描述
+4. 镜头类型和运镜要有变化，不能全是同一种
+5. 重点场景（高潮、转折）要用更震撼的镜头语言
+6. 每个分镜的 prompt 要包含角色外貌、服装、动作、表情等具体细节`
+}
+
 // Legacy: full generation prompt (still used for single-call regen)
 export function buildFullGenerationPrompt(existingMaterial) {
   let base = `你是一位专业的小说创作策划大师，拥有深厚的中外文学功底。用户会给你一段创作提示词，你需要基于提示词生成完整的小说策划物料。
@@ -547,7 +598,7 @@ JSON 结构如下:
 {
   "basic_info": { "ip_analysis": {}, "book_name": "", "genre": "", "style": "", "core_selling_point": "", "one_line_summary": "", "target_readers": "" },
   "world_building": { "era_setting": "", "power_structure": "", "rules": "", "social_atmosphere": "" },
-  "characters": [{ "name": "只写名字本身，不加任何括号说明", "role_type": "male_lead/female_lead/supporting/antagonist/minor（根据题材灵活分配，不强制要求必须有female_lead）", "description": "", "core_desire": "", "weakness": "", "secret": "" }],
+  "characters": [{ "name": "只写名字本身，不加任何括号说明", "role_type": "male_lead/female_lead/supporting/antagonist/minor（根据题材灵活分配，不强制要求必须有female_lead）", "description": "", "core_desire": "", "weakness": "", "secret": "", "image_prompt": "中文角色形象提示词，含外貌/服装/气质，可直接用于AI绘图" }],
   "relations": [{ "from_name": "", "to_name": "", "relation_type": "", "faction": "", "interest_link": "", "emotion_link": "", "description": "" }],
   "plot_control": { "main_storyline": "", "outline_summary": "" },
   "volumes": [{ "volume_number": 1, "title": "", "goal": "", "summary": "" }],

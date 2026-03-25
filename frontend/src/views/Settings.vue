@@ -21,7 +21,10 @@ const form = ref({
   ai_api_url: '',
   ai_api_key: '',
   ai_model: '',
-  ai_max_tokens: ''
+  ai_max_tokens: '',
+  storyboard_api_url: '',
+  storyboard_api_key: '',
+  storyboard_model: ''
 })
 const saving = ref(false)
 
@@ -33,7 +36,10 @@ onMounted(async () => {
       ai_api_url: auth.user.ai_api_url || '',
       ai_api_key: auth.user.ai_api_key || '',
       ai_model: auth.user.ai_model || '',
-      ai_max_tokens: auth.user.ai_max_tokens ? String(auth.user.ai_max_tokens) : ''
+      ai_max_tokens: auth.user.ai_max_tokens ? String(auth.user.ai_max_tokens) : '',
+      storyboard_api_url: auth.user.storyboard_api_url || '',
+      storyboard_api_key: auth.user.storyboard_api_key || '',
+      storyboard_model: auth.user.storyboard_model || ''
     }
   }
 })
@@ -106,7 +112,7 @@ async function save() {
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
               <rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 6h6M5 8.5h4M5 11h2" stroke-linecap="round"/>
             </svg>
-            <span>AI 接口配置</span>
+            <span>文本生成接口</span>
           </div>
         </template>
         <div class="form-grid">
@@ -120,12 +126,33 @@ async function save() {
               type="number"
               placeholder="留空使用默认值（按场景自动调整）"
             />
-            <span class="token-hint">控制每次 AI 请求的最大输出长度。留空则按不同生成场景自动使用合适的默认值（4096 ~ 128000）。建议根据所用模型的上下文窗口大小设置。</span>
+            <span class="token-hint">控制每次 AI 请求的最大输出长度。留空则按不同生成场景自动使用合适的默认值（4096 ~ 128000）。</span>
           </div>
         </div>
         <template #footer>
           <div class="settings-footer">
-            <span class="form-hint">兼容 OpenAI 协议的任何接口 (OpenAI / DeepSeek / 本地模型等)</span>
+            <span class="form-hint">用于小说物料、章节大纲、正文生成，兼容 OpenAI 协议</span>
+          </div>
+        </template>
+      </VCard>
+
+      <VCard>
+        <template #header>
+          <div class="settings-card-header">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
+              <rect x="1" y="3" width="9" height="7" rx="1"/><path d="M10 6l4-2v6l-4-2V6z" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>分镜生成接口</span>
+          </div>
+        </template>
+        <div class="form-grid">
+          <VInput v-model="form.storyboard_api_url" label="API 地址" placeholder="留空则使用文本生成接口" />
+          <VInput v-model="form.storyboard_api_key" label="API Key" type="password" placeholder="留空则使用文本生成接口的 Key" />
+          <VInput v-model="form.storyboard_model" label="模型" placeholder="留空则使用文本生成接口的模型" />
+        </div>
+        <template #footer>
+          <div class="settings-footer">
+            <span class="form-hint">用于章节分镜提示词生成，留空则自动使用文本生成接口</span>
             <VButton variant="primary" :loading="saving" @click="save">保存设置</VButton>
           </div>
         </template>
