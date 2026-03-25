@@ -489,28 +489,30 @@ const totalWords = computed(() => {
     </p>
 
     <template v-else>
-      <div class="vol-tabs">
-        <button
-          v-for="vol in store.volumes"
-          :key="vol.id"
-          class="vol-tab"
-          :class="{ 'vol-tab--active': selectedVolume === vol.id }"
-          @click="switchVolume(vol.id)"
-        >
-          <div class="vol-tab__main">
-            <span class="vol-tab__num">第{{ vol.volume_number }}卷</span>
-            <span v-if="vol.title" class="vol-tab__title">{{ vol.title.replace(/^第[^：:]+[：:]/, '') }}</span>
-          </div>
-          <div class="vol-tab__ops" v-if="selectedVolume === vol.id">
-            <button class="vol-tab__op" @click.stop="openEditVol(vol)" title="编辑卷">
-              <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8.5 2.5l3 3M2 9l6-6 3 3-6 6H2V9z" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </button>
-            <button class="vol-tab__op vol-tab__op--del" @click.stop="deleteVol(vol)" title="删除卷">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8" stroke-linecap="round"/></svg>
-            </button>
-          </div>
-        </button>
-        <button class="vol-tab vol-tab--add" @click="openCreateVol">
+      <div class="vol-tabs-wrap">
+        <div class="vol-tabs">
+          <button
+            v-for="vol in store.volumes"
+            :key="vol.id"
+            class="vol-tab"
+            :class="{ 'vol-tab--active': selectedVolume === vol.id }"
+            @click="switchVolume(vol.id)"
+          >
+            <div class="vol-tab__main">
+              <span class="vol-tab__num">第{{ vol.volume_number }}卷</span>
+              <span v-if="vol.title" class="vol-tab__title">{{ vol.title.replace(/^第[^：:]+[：:]/, '') }}</span>
+            </div>
+            <div class="vol-tab__ops" v-if="selectedVolume === vol.id">
+              <button class="vol-tab__op" @click.stop="openEditVol(vol)" title="编辑卷">
+                <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8.5 2.5l3 3M2 9l6-6 3 3-6 6H2V9z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <button class="vol-tab__op vol-tab__op--del" @click.stop="deleteVol(vol)" title="删除卷">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+          </button>
+        </div>
+        <button class="vol-tab-add" @click="openCreateVol" title="添加卷">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M7 2v10M2 7h10" stroke-linecap="round"/>
           </svg>
@@ -821,16 +823,38 @@ const totalWords = computed(() => {
   font-size: 14px;
 }
 
+/* 卷选项卡容器：滚动区 + 固定添加按钮 */
+.vol-tabs-wrap {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  margin-bottom: 16px;
+  position: relative;
+}
+
 .vol-tabs {
   display: flex;
   gap: 6px;
-  margin-bottom: 16px;
   overflow-x: auto;
   padding-bottom: 4px;
-  scrollbar-width: none;
+  flex: 1;
+  min-width: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+  /* 右侧留出分隔线空间 */
+  padding-right: 8px;
+  margin-right: 8px;
+  border-right: 1px solid var(--border-default);
 }
 
-.vol-tabs::-webkit-scrollbar { display: none; }
+.vol-tabs::-webkit-scrollbar {
+  height: 3px;
+}
+
+.vol-tabs::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 2px;
+}
 
 .vol-tab {
   display: flex;
@@ -843,7 +867,8 @@ const totalWords = computed(() => {
   transition: all var(--transition-fast);
   cursor: pointer;
   white-space: nowrap;
-  min-width: 100px;
+  min-width: 110px;
+  flex-shrink: 0;
   position: relative;
 }
 
@@ -856,23 +881,31 @@ const totalWords = computed(() => {
   background: var(--bg-active);
 }
 
-.vol-tab--add {
+/* 固定在右侧的添加卷按钮 */
+.vol-tab-add {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-width: 90px;
+  gap: 4px;
+  flex-shrink: 0;
+  width: 72px;
+  padding: 8px 0;
+  border-radius: var(--radius-md);
+  background: var(--bg-nested);
+  border: 1px dashed var(--border-default);
   color: var(--text-tertiary);
-  border-style: dashed;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  align-self: stretch;
 }
 
-.vol-tab--add:hover {
+.vol-tab-add:hover {
   color: var(--accent-blue, #0070f3);
   border-color: var(--accent-blue, #0070f3);
-  background: var(--accent-blue-subtle, rgba(0, 112, 243, 0.04));
+  background: rgba(0, 112, 243, 0.04);
 }
 
 .vol-tab__main {
