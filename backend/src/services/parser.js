@@ -74,7 +74,8 @@ export async function parseAndSaveAll(projectId, aiRawResult) {
 
   // Update project name from basic_info if available
   if (data.basic_info?.book_name) {
-    await sql`UPDATE projects SET name = ${data.basic_info.book_name}, updated_at = NOW() WHERE id = ${projectId}`
+    await sql`UPDATE projects SET name = ${data.basic_info.book_name}, updated_at = NOW()
+      WHERE id = ${projectId} AND name = '生成中...'`
   }
 }
 
@@ -86,7 +87,9 @@ export async function parseAndSaveSection(projectId, section, aiRawResult) {
     case 'basic_info':
       await saveBasicInfo(projectId, sectionData)
       if (sectionData.book_name) {
-        await sql`UPDATE projects SET name = ${sectionData.book_name}, updated_at = NOW() WHERE id = ${projectId}`
+        // 只有项目名是占位符时才用 AI 生成的书名覆盖，保留用户自定义的名称
+        await sql`UPDATE projects SET name = ${sectionData.book_name}, updated_at = NOW()
+          WHERE id = ${projectId} AND name = '生成中...'`
       }
       break
     case 'world_building':

@@ -17,7 +17,7 @@ const emit = defineEmits(['continue', 'regenerate', 'stop'])
 const expanded = ref(false)
 
 watch(() => props.status, (val) => {
-  if (val === 'generating') expanded.value = true
+  if (val === 'generating' || val === 'failed') expanded.value = true
 }, { immediate: true })
 
 const progress = computed(() => {
