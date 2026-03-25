@@ -11,7 +11,6 @@ import VCard from '../ui/VCard.vue'
 import VInput from '../ui/VInput.vue'
 import VTextarea from '../ui/VTextarea.vue'
 import VSelect from '../ui/VSelect.vue'
-import VDrawer from '../ui/VDrawer.vue'
 import VAvatar from '../ui/VAvatar.vue'
 import VBadge from '../ui/VBadge.vue'
 import VConfirmModal from '../ui/VConfirmModal.vue'
@@ -62,6 +61,7 @@ onMounted(loadData)
 
 function openCreate() { editForm.value = emptyForm(); showEditor.value = true }
 function openEdit(char) { editForm.value = { ...char }; showEditor.value = true }
+function closeEditor() { showEditor.value = false }
 
 async function saveChar() {
   if (!editForm.value.name.trim()) { toast.warning('请输入角色名'); return }
@@ -151,86 +151,105 @@ async function aiGenerateChar() {
 
 <template>
   <div>
-    <div class="section-header">
-      <div class="section-header__left">
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3">
-          <circle cx="9" cy="6" r="3.5"/><path d="M3 16c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke-linecap="round"/>
-        </svg>
-        <h3 class="section-title" style="margin:0">角色设定</h3>
-      </div>
-      <div class="flex gap-2">
-        <VButton variant="ghost" size="sm" @click="showRegenInput = !showRegenInput" :loading="regenerating" :disabled="isGenerating">
-          AI 重新生成
-        </VButton>
-        <VButton variant="primary" size="sm" @click="openCreate">添加角色</VButton>
-      </div>
-    </div>
-
-    <div v-if="showRegenInput" class="regen-bar">
-      <VInput v-model="regenPrompt" placeholder="补充指令（可选），如：增加一个亦正亦邪的角色..." />
-      <VButton variant="primary" size="sm" :loading="regenerating" :disabled="isGenerating" @click="handleRegenClick">生成</VButton>
-    </div>
-
-    <div v-if="store.characters.length" class="char-grid">
-      <VCard v-for="char in store.characters" :key="char.id" hoverable padding="sm">
-        <div class="char-card" @click="openEdit(char)">
-          <div class="char-card__top">
-            <VAvatar :name="char.name" :color="char.avatar_color" :size="38" />
-            <div class="char-card__info">
-              <span class="char-card__name" :title="char.name">{{ char.name }}</span>
-              <span class="char-card__badge">
-                <VBadge :variant="roleVariantMap[char.role_type] || 'default'">
-                  {{ roleLabelMap[char.role_type] || char.role_type }}
-                </VBadge>
-              </span>
-            </div>
-            <button class="char-card__del" @click.stop="deleteChar(char)">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8" stroke-linecap="round"/></svg>
-            </button>
+    <!-- 编辑面板视图 -->
+    <Transition name="panel-slide">
+      <div v-if="showEditor" class="edit-panel">
+        <div class="edit-panel__header">
+          <button class="edit-panel__back" @click="closeEditor">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M10 3L5 8l5 5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            返回角色列表
+          </button>
+          <h3 class="edit-panel__title">{{ editForm.id ? '编辑角色' : '添加角色' }}</h3>
+          <div class="edit-panel__actions">
+            <VButton variant="ghost" size="sm" :loading="aiGenerating" :disabled="isGenerating" @click="aiGenerateChar">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0">
+                <path d="M7 1v3M7 10v3M1 7h3M10 7h3M2.8 2.8l2.1 2.1M9.1 9.1l2.1 2.1M11.2 2.8l-2.1 2.1M4.9 9.1l-2.1 2.1" stroke-linecap="round"/>
+              </svg>
+              AI 智能填充
+            </VButton>
+            <VButton variant="secondary" size="sm" @click="closeEditor">取消</VButton>
+            <VButton variant="primary" size="sm" :loading="saving" :disabled="isGenerating" @click="saveChar">保存</VButton>
           </div>
-          <p v-if="char.description" class="char-card__desc">{{ char.description }}</p>
-          <p v-if="char.core_desire" class="char-card__tag">
-            <span class="char-card__tag-label">欲望</span>{{ char.core_desire }}
-          </p>
-          <p v-if="char.image_prompt" class="char-card__tag char-card__tag--image">
-            <span class="char-card__tag-label">形象</span>{{ char.image_prompt }}
-          </p>
         </div>
-      </VCard>
-    </div>
-    <p v-else class="empty-text">AI 尚未生成角色，或点击"添加角色"手动创建</p>
-
-    <VDrawer v-model="showEditor" :title="editForm.id ? '编辑角色' : '添加角色'" width="480px">
-      <div class="form-grid">
-        <div class="form-row">
-          <VInput v-model="editForm.name" label="角色名" placeholder="角色名称" />
-          <VSelect v-model="editForm.role_type" label="角色类型" :options="roleOptions" />
-        </div>
-        <VTextarea v-model="editForm.description" label="角色描述" placeholder="外貌、性格、背景简述..." :rows="3" />
-        <VTextarea v-model="editForm.core_desire" label="核心欲望" placeholder="这个角色最想要什么？" :rows="2" />
-        <VTextarea v-model="editForm.weakness" label="弱点" placeholder="性格/能力上的致命弱点" :rows="2" />
-        <VTextarea v-model="editForm.secret" label="秘密" placeholder="不为人知的秘密" :rows="2" />
-        <div class="image-prompt-field">
-          <VTextarea
-            v-model="editForm.image_prompt"
-            label="形象提示词（AI 绘图/视频用）"
-            placeholder="例：25岁男性，面容俊朗清冷，白色汉服僧袍，腰系佛珠，眉心隐现金色舍利印记，气质出尘，背景为古代寺庙，写实风格，高清，电影质感"
-            :rows="4"
-          />
-          <p class="image-prompt-hint">建议包含：年龄性别、面部特征、服装配饰、气质神态、背景环境、画风（写实/动漫/水墨等）</p>
+        <div class="edit-panel__body">
+          <div class="edit-form-grid">
+            <div class="edit-form-row">
+              <VInput v-model="editForm.name" label="角色名" placeholder="角色名称" />
+              <VSelect v-model="editForm.role_type" label="角色类型" :options="roleOptions" />
+            </div>
+            <VTextarea v-model="editForm.description" label="角色描述" placeholder="外貌、性格、背景简述..." :rows="4" />
+            <div class="edit-form-cols">
+              <VTextarea v-model="editForm.core_desire" label="核心欲望" placeholder="这个角色最想要什么？" :rows="4" />
+              <VTextarea v-model="editForm.weakness" label="弱点" placeholder="性格/能力上的致命弱点" :rows="4" />
+            </div>
+            <VTextarea v-model="editForm.secret" label="秘密" placeholder="不为人知的秘密" :rows="3" />
+            <div class="image-prompt-field">
+              <VTextarea
+                v-model="editForm.image_prompt"
+                label="形象提示词（AI 绘图/视频用）"
+                placeholder="例：25岁男性，面容俊朗清冷，白色汉服僧袍，腰系佛珠，眉心隐现金色舍利印记，气质出尘，背景为古代寺庙，写实风格，高清，电影质感"
+                :rows="4"
+              />
+              <p class="image-prompt-hint">建议包含：年龄性别、面部特征、服装配饰、气质神态、背景环境、画风（写实/动漫/水墨等）</p>
+            </div>
+          </div>
         </div>
       </div>
-      <template #footer>
-        <VButton variant="ghost" size="sm" :loading="aiGenerating" @click="aiGenerateChar" class="ai-fill-btn">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0">
-            <path d="M7 1v3M7 10v3M1 7h3M10 7h3M2.8 2.8l2.1 2.1M9.1 9.1l2.1 2.1M11.2 2.8l-2.1 2.1M4.9 9.1l-2.1 2.1" stroke-linecap="round"/>
+    </Transition>
+
+    <!-- 列表视图 -->
+    <div v-if="!showEditor">
+      <div class="section-header">
+        <div class="section-header__left">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3">
+            <circle cx="9" cy="6" r="3.5"/><path d="M3 16c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke-linecap="round"/>
           </svg>
-          AI 智能填充
-        </VButton>
-        <VButton variant="secondary" @click="showEditor = false">取消</VButton>
-        <VButton variant="primary" :loading="saving" :disabled="isGenerating" @click="saveChar">保存</VButton>
-      </template>
-    </VDrawer>
+          <h3 class="section-title" style="margin:0">角色设定</h3>
+        </div>
+        <div class="flex gap-2">
+          <VButton variant="ghost" size="sm" @click="showRegenInput = !showRegenInput" :loading="regenerating" :disabled="isGenerating">
+            AI 重新生成
+          </VButton>
+          <VButton variant="primary" size="sm" @click="openCreate">添加角色</VButton>
+        </div>
+      </div>
+
+      <div v-if="showRegenInput" class="regen-bar">
+        <VInput v-model="regenPrompt" placeholder="补充指令（可选），如：增加一个亦正亦邪的角色..." />
+        <VButton variant="primary" size="sm" :loading="regenerating" :disabled="isGenerating" @click="handleRegenClick">生成</VButton>
+      </div>
+
+      <div v-if="store.characters.length" class="char-grid">
+        <VCard v-for="char in store.characters" :key="char.id" hoverable padding="sm">
+          <div class="char-card" @click="openEdit(char)">
+            <div class="char-card__top">
+              <VAvatar :name="char.name" :color="char.avatar_color" :size="38" />
+              <div class="char-card__info">
+                <span class="char-card__name" :title="char.name">{{ char.name }}</span>
+                <span class="char-card__badge">
+                  <VBadge :variant="roleVariantMap[char.role_type] || 'default'">
+                    {{ roleLabelMap[char.role_type] || char.role_type }}
+                  </VBadge>
+                </span>
+              </div>
+              <button class="char-card__del" @click.stop="deleteChar(char)">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+            <p v-if="char.description" class="char-card__desc">{{ char.description }}</p>
+            <p v-if="char.core_desire" class="char-card__tag">
+              <span class="char-card__tag-label">欲望</span>{{ char.core_desire }}
+            </p>
+            <p v-if="char.image_prompt" class="char-card__tag char-card__tag--image">
+              <span class="char-card__tag-label">形象</span>{{ char.image_prompt }}
+            </p>
+          </div>
+        </VCard>
+      </div>
+      <p v-else class="empty-text">AI 尚未生成角色，或点击"添加角色"手动创建</p>
+    </div>
 
     <VConfirmModal
       v-model="showConfirmModal"
@@ -396,8 +415,79 @@ async function aiGenerateChar() {
   -webkit-box-orient: vertical;
 }
 
-.form-grid { display: flex; flex-direction: column; gap: var(--space-4); }
-.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+/* 编辑面板 */
+.edit-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.edit-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 16px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border-default);
+  flex-wrap: wrap;
+}
+
+.edit-panel__back {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  background: none;
+  border: none;
+  flex-shrink: 0;
+}
+
+.edit-panel__back:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.edit-panel__title {
+  font-size: 16px;
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+}
+
+.edit-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.edit-panel__body {
+  /* 无额外包裹，直接显示内容 */
+}
+
+.edit-form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: 800px;
+}
+
+.edit-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+.edit-form-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
 
 .image-prompt-field { display: flex; flex-direction: column; gap: 6px; }
 .image-prompt-hint {
@@ -407,7 +497,15 @@ async function aiGenerateChar() {
   padding: 0 2px;
 }
 
-.ai-fill-btn { margin-right: auto; }
+/* 面板切换动画 */
+.panel-slide-enter-active,
+.panel-slide-leave-active {
+  transition: opacity 0.15s ease;
+}
+.panel-slide-enter-from,
+.panel-slide-leave-to {
+  opacity: 0;
+}
 .empty-text { color: var(--text-tertiary); text-align: center; padding: var(--space-10); font-size: 14px; }
 
 .modal-footer-full {

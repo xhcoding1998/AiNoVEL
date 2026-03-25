@@ -10,7 +10,6 @@ import VCard from '../ui/VCard.vue'
 import VInput from '../ui/VInput.vue'
 import VTextarea from '../ui/VTextarea.vue'
 import VSelect from '../ui/VSelect.vue'
-import VDrawer from '../ui/VDrawer.vue'
 import VBadge from '../ui/VBadge.vue'
 import VConfirmModal from '../ui/VConfirmModal.vue'
 
@@ -472,6 +471,70 @@ const totalWords = computed(() => {
 
 <template>
   <div>
+    <!-- 章节编辑面板 -->
+    <div v-if="showEditor" class="edit-panel">
+      <div class="edit-panel__header">
+        <button class="edit-panel__back" @click="showEditor = false">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M10 3L5 8l5 5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          返回章节列表
+        </button>
+        <h3 class="edit-panel__title">{{ chapterForm.id ? '编辑章节' : '添加章节' }}</h3>
+        <div class="edit-panel__actions">
+          <VButton variant="ghost" size="sm" :loading="aiGeneratingChapter" :disabled="isGenerating || aiGeneratingChapter" @click="aiFillChapter">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0">
+              <path d="M7 1v3M7 10v3M1 7h3M10 7h3M2.8 2.8l2.1 2.1M9.1 9.1l2.1 2.1M11.2 2.8l-2.1 2.1M4.9 9.1l-2.1 2.1" stroke-linecap="round"/>
+            </svg>
+            AI 智能填充
+          </VButton>
+          <VButton variant="secondary" size="sm" @click="showEditor = false">取消</VButton>
+          <VButton variant="primary" size="sm" :loading="saving" :disabled="isGenerating" @click="saveChapter">保存</VButton>
+        </div>
+      </div>
+      <div class="edit-form-grid">
+        <div class="edit-form-row-3">
+          <VInput v-model.number="chapterForm.chapter_number" label="章节号" type="number" />
+          <VInput v-model="chapterForm.title" label="章节标题" placeholder="章节标题" style="grid-column: span 2" />
+        </div>
+        <VSelect v-model="chapterForm.status" label="状态" :options="statusOptions" style="max-width:200px" />
+        <VTextarea v-model="chapterForm.content" label="章节内容" placeholder="在此编写章节内容..." :rows="24" noResize />
+      </div>
+    </div>
+
+    <!-- 分卷编辑面板 -->
+    <div v-else-if="showVolEditor" class="edit-panel">
+      <div class="edit-panel__header">
+        <button class="edit-panel__back" @click="showVolEditor = false">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M10 3L5 8l5 5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          返回章节列表
+        </button>
+        <h3 class="edit-panel__title">{{ volForm.id ? '编辑分卷' : '添加分卷' }}</h3>
+        <div class="edit-panel__actions">
+          <VButton variant="ghost" size="sm" :loading="aiGeneratingVol" :disabled="isGenerating || aiGeneratingVol" @click="aiFillVol">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0">
+              <path d="M7 1v3M7 10v3M1 7h3M10 7h3M2.8 2.8l2.1 2.1M9.1 9.1l2.1 2.1M11.2 2.8l-2.1 2.1M4.9 9.1l-2.1 2.1" stroke-linecap="round"/>
+            </svg>
+            AI 智能填充
+          </VButton>
+          <VButton variant="secondary" size="sm" @click="showVolEditor = false">取消</VButton>
+          <VButton variant="primary" size="sm" :loading="savingVol" :disabled="isGenerating" @click="saveVol">保存</VButton>
+        </div>
+      </div>
+      <div class="edit-form-grid">
+        <div class="edit-form-row">
+          <VInput v-model.number="volForm.volume_number" label="卷号" type="number" />
+          <VInput v-model="volForm.title" label="卷标题" placeholder="如：第一卷：风起云涌" />
+        </div>
+        <VTextarea v-model="volForm.goal" label="本卷目标" placeholder="本卷核心目标..." :rows="5" />
+        <VTextarea v-model="volForm.summary" label="内容概要" placeholder="详细内容概要..." :rows="10" />
+      </div>
+    </div>
+
+    <!-- 主列表视图 -->
+    <template v-else>
     <div class="section-header">
       <div class="section-header__left">
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3">
@@ -681,62 +744,6 @@ const totalWords = computed(() => {
       </div>
     </template>
 
-    <VDrawer v-model="showEditor" :title="chapterForm.id ? '编辑章节' : '添加章节'" width="600px">
-      <div class="form-grid">
-        <div class="form-row">
-          <VInput v-model.number="chapterForm.chapter_number" label="章节号" type="number" />
-          <VInput v-model="chapterForm.title" label="章节标题" placeholder="章节标题" />
-        </div>
-        <VSelect v-model="chapterForm.status" label="状态" :options="statusOptions" />
-        <VTextarea v-model="chapterForm.content" label="章节内容" placeholder="在此编写章节内容..." :rows="18" :maxHeight="9999" noResize />
-      </div>
-      <template #footer>
-        <VButton
-          variant="ghost"
-          size="sm"
-          :loading="aiGeneratingChapter"
-          :disabled="isGenerating || aiGeneratingChapter"
-          @click="aiFillChapter"
-          class="ai-fill-btn"
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0">
-            <path d="M7 1v3M7 10v3M1 7h3M10 7h3M2.8 2.8l2.1 2.1M9.1 9.1l2.1 2.1M11.2 2.8l-2.1 2.1M4.9 9.1l-2.1 2.1" stroke-linecap="round"/>
-          </svg>
-          AI 智能填充
-        </VButton>
-        <VButton variant="secondary" @click="showEditor = false">取消</VButton>
-        <VButton variant="primary" :loading="saving" :disabled="isGenerating" @click="saveChapter">保存</VButton>
-      </template>
-    </VDrawer>
-
-    <VDrawer v-model="showVolEditor" :title="volForm.id ? '编辑分卷' : '添加分卷'" width="520px">
-      <div class="form-grid">
-        <div class="form-row">
-          <VInput v-model.number="volForm.volume_number" label="卷号" type="number" />
-          <VInput v-model="volForm.title" label="卷标题" placeholder="如：第一卷：风起云涌" />
-        </div>
-        <VTextarea v-model="volForm.goal" label="本卷目标" placeholder="本卷核心目标..." :rows="4" />
-        <VTextarea v-model="volForm.summary" label="内容概要" placeholder="详细内容概要..." :rows="7" />
-      </div>
-      <template #footer>
-        <VButton
-          variant="ghost"
-          size="sm"
-          :loading="aiGeneratingVol"
-          :disabled="isGenerating || aiGeneratingVol"
-          @click="aiFillVol"
-          class="ai-fill-btn"
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0">
-            <path d="M7 1v3M7 10v3M1 7h3M10 7h3M2.8 2.8l2.1 2.1M9.1 9.1l2.1 2.1M11.2 2.8l-2.1 2.1M4.9 9.1l-2.1 2.1" stroke-linecap="round"/>
-          </svg>
-          AI 智能填充
-        </VButton>
-        <VButton variant="secondary" @click="showVolEditor = false">取消</VButton>
-        <VButton variant="primary" :loading="savingVol" :disabled="isGenerating" @click="saveVol">保存</VButton>
-      </template>
-    </VDrawer>
-
     <VConfirmModal
       v-model="confirmDelete.show"
       :title="confirmDelete.type === 'volume' ? '删除分卷' : '删除章节'"
@@ -754,6 +761,7 @@ const totalWords = computed(() => {
         <p style="margin-top:8px">删除章节可能破坏剧情连贯性，若该章节包含重要伏笔或情节转折，建议先确认对后续章节无影响。</p>
       </template>
     </VConfirmModal>
+    </template><!-- end v-else main list -->
   </div>
 </template>
 
@@ -1191,8 +1199,75 @@ const totalWords = computed(() => {
   background: rgba(229, 62, 62, 0.08);
 }
 
-.form-grid { display: flex; flex-direction: column; gap: 16px; }
-.form-row { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; }
+/* 页内编辑面板 */
+.edit-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.edit-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 16px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border-default);
+  flex-wrap: wrap;
+}
+
+.edit-panel__back {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  background: none;
+  border: none;
+  flex-shrink: 0;
+}
+
+.edit-panel__back:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.edit-panel__title {
+  font-size: 16px;
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.edit-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.edit-form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.edit-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+.edit-form-row-3 {
+  display: grid;
+  grid-template-columns: 100px 1fr 1fr;
+  gap: var(--space-4);
+}
 .ai-fill-btn { margin-right: auto; }
 
 .add-chapter-bar {
