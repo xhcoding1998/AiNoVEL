@@ -10,7 +10,7 @@ import VCard from '../ui/VCard.vue'
 import VInput from '../ui/VInput.vue'
 import VTextarea from '../ui/VTextarea.vue'
 import VSelect from '../ui/VSelect.vue'
-import VModal from '../ui/VModal.vue'
+import VDrawer from '../ui/VDrawer.vue'
 import VBadge from '../ui/VBadge.vue'
 import VConfirmModal from '../ui/VConfirmModal.vue'
 
@@ -681,69 +681,61 @@ const totalWords = computed(() => {
       </div>
     </template>
 
-    <VModal v-model="showEditor" :title="chapterForm.id ? '编辑章节' : '添加章节'" width="780px">
+    <VDrawer v-model="showEditor" :title="chapterForm.id ? '编辑章节' : '添加章节'" width="600px">
       <div class="form-grid">
         <div class="form-row">
           <VInput v-model.number="chapterForm.chapter_number" label="章节号" type="number" />
           <VInput v-model="chapterForm.title" label="章节标题" placeholder="章节标题" />
         </div>
         <VSelect v-model="chapterForm.status" label="状态" :options="statusOptions" />
-        <VTextarea v-model="chapterForm.content" label="章节内容" placeholder="在此编写章节内容..." :rows="12" :maxHeight="420" noResize />
+        <VTextarea v-model="chapterForm.content" label="章节内容" placeholder="在此编写章节内容..." :rows="18" :maxHeight="9999" noResize />
       </div>
       <template #footer>
-        <div class="modal-footer-full">
-          <VButton
-            variant="ghost"
-            size="sm"
-            :loading="aiGeneratingChapter"
-            :disabled="isGenerating || aiGeneratingChapter"
-            @click="aiFillChapter"
-            class="ai-fill-btn"
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0">
-              <path d="M7 1v3M7 10v3M1 7h3M10 7h3M2.8 2.8l2.1 2.1M9.1 9.1l2.1 2.1M11.2 2.8l-2.1 2.1M4.9 9.1l-2.1 2.1" stroke-linecap="round"/>
-            </svg>
-            AI 智能填充
-          </VButton>
-          <div class="modal-footer-right">
-            <VButton variant="secondary" @click="showEditor = false">取消</VButton>
-            <VButton variant="primary" :loading="saving" :disabled="isGenerating" @click="saveChapter">保存</VButton>
-          </div>
-        </div>
+        <VButton
+          variant="ghost"
+          size="sm"
+          :loading="aiGeneratingChapter"
+          :disabled="isGenerating || aiGeneratingChapter"
+          @click="aiFillChapter"
+          class="ai-fill-btn"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0">
+            <path d="M7 1v3M7 10v3M1 7h3M10 7h3M2.8 2.8l2.1 2.1M9.1 9.1l2.1 2.1M11.2 2.8l-2.1 2.1M4.9 9.1l-2.1 2.1" stroke-linecap="round"/>
+          </svg>
+          AI 智能填充
+        </VButton>
+        <VButton variant="secondary" @click="showEditor = false">取消</VButton>
+        <VButton variant="primary" :loading="saving" :disabled="isGenerating" @click="saveChapter">保存</VButton>
       </template>
-    </VModal>
+    </VDrawer>
 
-    <VModal v-model="showVolEditor" :title="volForm.id ? '编辑分卷' : '添加分卷'" width="600px">
+    <VDrawer v-model="showVolEditor" :title="volForm.id ? '编辑分卷' : '添加分卷'" width="520px">
       <div class="form-grid">
         <div class="form-row">
           <VInput v-model.number="volForm.volume_number" label="卷号" type="number" />
           <VInput v-model="volForm.title" label="卷标题" placeholder="如：第一卷：风起云涌" />
         </div>
-        <VTextarea v-model="volForm.goal" label="本卷目标" placeholder="本卷核心目标..." :rows="3" />
-        <VTextarea v-model="volForm.summary" label="内容概要" placeholder="详细内容概要..." :rows="5" />
+        <VTextarea v-model="volForm.goal" label="本卷目标" placeholder="本卷核心目标..." :rows="4" />
+        <VTextarea v-model="volForm.summary" label="内容概要" placeholder="详细内容概要..." :rows="7" />
       </div>
       <template #footer>
-        <div class="modal-footer-full">
-          <VButton
-            variant="ghost"
-            size="sm"
-            :loading="aiGeneratingVol"
-            :disabled="isGenerating || aiGeneratingVol"
-            @click="aiFillVol"
-            class="ai-fill-btn"
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0">
-              <path d="M7 1v3M7 10v3M1 7h3M10 7h3M2.8 2.8l2.1 2.1M9.1 9.1l2.1 2.1M11.2 2.8l-2.1 2.1M4.9 9.1l-2.1 2.1" stroke-linecap="round"/>
-            </svg>
-            AI 智能填充
-          </VButton>
-          <div class="modal-footer-right">
-            <VButton variant="secondary" @click="showVolEditor = false">取消</VButton>
-            <VButton variant="primary" :loading="savingVol" :disabled="isGenerating" @click="saveVol">保存</VButton>
-          </div>
-        </div>
+        <VButton
+          variant="ghost"
+          size="sm"
+          :loading="aiGeneratingVol"
+          :disabled="isGenerating || aiGeneratingVol"
+          @click="aiFillVol"
+          class="ai-fill-btn"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0">
+            <path d="M7 1v3M7 10v3M1 7h3M10 7h3M2.8 2.8l2.1 2.1M9.1 9.1l2.1 2.1M11.2 2.8l-2.1 2.1M4.9 9.1l-2.1 2.1" stroke-linecap="round"/>
+          </svg>
+          AI 智能填充
+        </VButton>
+        <VButton variant="secondary" @click="showVolEditor = false">取消</VButton>
+        <VButton variant="primary" :loading="savingVol" :disabled="isGenerating" @click="saveVol">保存</VButton>
       </template>
-    </VModal>
+    </VDrawer>
 
     <VConfirmModal
       v-model="confirmDelete.show"
@@ -1201,6 +1193,7 @@ const totalWords = computed(() => {
 
 .form-grid { display: flex; flex-direction: column; gap: 16px; }
 .form-row { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; }
+.ai-fill-btn { margin-right: auto; }
 
 .add-chapter-bar {
   display: flex;

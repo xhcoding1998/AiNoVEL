@@ -11,7 +11,7 @@ import VCard from '../ui/VCard.vue'
 import VInput from '../ui/VInput.vue'
 import VTextarea from '../ui/VTextarea.vue'
 import VSelect from '../ui/VSelect.vue'
-import VModal from '../ui/VModal.vue'
+import VDrawer from '../ui/VDrawer.vue'
 import VAvatar from '../ui/VAvatar.vue'
 import VBadge from '../ui/VBadge.vue'
 import VConfirmModal from '../ui/VConfirmModal.vue'
@@ -200,33 +200,37 @@ async function aiGenerateChar() {
     </div>
     <p v-else class="empty-text">AI 尚未生成角色，或点击"添加角色"手动创建</p>
 
-    <VModal v-model="showEditor" :title="editForm.id ? '编辑角色' : '添加角色'" width="520px">
+    <VDrawer v-model="showEditor" :title="editForm.id ? '编辑角色' : '添加角色'" width="480px">
       <div class="form-grid">
         <div class="form-row">
           <VInput v-model="editForm.name" label="角色名" placeholder="角色名称" />
           <VSelect v-model="editForm.role_type" label="角色类型" :options="roleOptions" />
         </div>
-        <VTextarea v-model="editForm.description" label="角色描述" placeholder="外貌、性格、背景简述..." :rows="2" />
+        <VTextarea v-model="editForm.description" label="角色描述" placeholder="外貌、性格、背景简述..." :rows="3" />
         <VTextarea v-model="editForm.core_desire" label="核心欲望" placeholder="这个角色最想要什么？" :rows="2" />
         <VTextarea v-model="editForm.weakness" label="弱点" placeholder="性格/能力上的致命弱点" :rows="2" />
         <VTextarea v-model="editForm.secret" label="秘密" placeholder="不为人知的秘密" :rows="2" />
-        <VTextarea v-model="editForm.image_prompt" label="形象提示词" placeholder="AI 绘图/视频用的角色外貌描述，如：约25岁男性，身着白色僧袍，面容清秀温和，眉心有舍利子印记..." :rows="3" />
+        <div class="image-prompt-field">
+          <VTextarea
+            v-model="editForm.image_prompt"
+            label="形象提示词（AI 绘图/视频用）"
+            placeholder="例：25岁男性，面容俊朗清冷，白色汉服僧袍，腰系佛珠，眉心隐现金色舍利印记，气质出尘，背景为古代寺庙，写实风格，高清，电影质感"
+            :rows="4"
+          />
+          <p class="image-prompt-hint">建议包含：年龄性别、面部特征、服装配饰、气质神态、背景环境、画风（写实/动漫/水墨等）</p>
+        </div>
       </div>
       <template #footer>
-        <div class="modal-footer-full">
-          <VButton variant="ghost" size="sm" :loading="aiGenerating" @click="aiGenerateChar" class="ai-fill-btn">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0">
-              <path d="M7 1v3M7 10v3M1 7h3M10 7h3M2.8 2.8l2.1 2.1M9.1 9.1l2.1 2.1M11.2 2.8l-2.1 2.1M4.9 9.1l-2.1 2.1" stroke-linecap="round"/>
-            </svg>
-            AI 智能填充
-          </VButton>
-          <div class="modal-footer-right">
-            <VButton variant="secondary" @click="showEditor = false">取消</VButton>
-            <VButton variant="primary" :loading="saving" :disabled="isGenerating" @click="saveChar">保存</VButton>
-          </div>
-        </div>
+        <VButton variant="ghost" size="sm" :loading="aiGenerating" @click="aiGenerateChar" class="ai-fill-btn">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0">
+            <path d="M7 1v3M7 10v3M1 7h3M10 7h3M2.8 2.8l2.1 2.1M9.1 9.1l2.1 2.1M11.2 2.8l-2.1 2.1M4.9 9.1l-2.1 2.1" stroke-linecap="round"/>
+          </svg>
+          AI 智能填充
+        </VButton>
+        <VButton variant="secondary" @click="showEditor = false">取消</VButton>
+        <VButton variant="primary" :loading="saving" :disabled="isGenerating" @click="saveChar">保存</VButton>
       </template>
-    </VModal>
+    </VDrawer>
 
     <VConfirmModal
       v-model="showConfirmModal"
@@ -394,6 +398,16 @@ async function aiGenerateChar() {
 
 .form-grid { display: flex; flex-direction: column; gap: var(--space-4); }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+
+.image-prompt-field { display: flex; flex-direction: column; gap: 6px; }
+.image-prompt-hint {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
+  padding: 0 2px;
+}
+
+.ai-fill-btn { margin-right: auto; }
 .empty-text { color: var(--text-tertiary); text-align: center; padding: var(--space-10); font-size: 14px; }
 
 .modal-footer-full {

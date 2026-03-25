@@ -347,7 +347,7 @@ JSON 结构：
       "core_desire": "核心欲望（100字以上，不是表面目标而是深层心理需求，如'不是想变强，而是恐惧再次失去'）",
       "weakness": "致命弱点（100字以上，必须是真正能造成困境的弱点，而非无关痛痒的小毛病。包括：弱点来源、如何被敌人利用、对剧情的影响）",
       "secret": "核心秘密（100字以上，一个能在关键时刻引爆剧情的秘密，包括：秘密的来龙去脉、谁知道这个秘密、暴露后的冲击力）",
-      "image_prompt": "角色形象提示词（中文，100-200字，专为AI绘图/视频生成设计，包含：①年龄与性别 ②面部特征（五官、肤色、发型发色） ③身材与体型 ④标志性服装与配饰 ⑤气质与神态。要求具体可视化，能直接用于生成角色立绘）"
+      "image_prompt": "角色形象提示词（中文，专为AI绘图/视频生成设计，格式参考：'25岁男性，面容俊朗清冷，白色汉服僧袍，腰系佛珠，眉心隐现金色印记，气质出尘，古代寺庙背景，写实风格，高清，电影质感'。必须包含：年龄性别+面部特征+发型发色+服装配饰+气质神态+背景环境+画风关键词，禁止使用抽象词汇，要求具体可视化）"
     }
   ]
 }
@@ -605,7 +605,7 @@ JSON 结构如下:
 {
   "basic_info": { "ip_analysis": {}, "book_name": "", "genre": "", "style": "", "core_selling_point": "", "one_line_summary": "", "target_readers": "" },
   "world_building": { "era_setting": "", "power_structure": "", "rules": "", "social_atmosphere": "" },
-  "characters": [{ "name": "只写名字本身，不加任何括号说明", "role_type": "male_lead/female_lead/supporting/antagonist/minor（根据题材灵活分配，不强制要求必须有female_lead）", "description": "", "core_desire": "", "weakness": "", "secret": "", "image_prompt": "中文角色形象提示词，含外貌/服装/气质，可直接用于AI绘图" }],
+  "characters": [{ "name": "只写名字本身，不加任何括号说明", "role_type": "male_lead/female_lead/supporting/antagonist/minor（根据题材灵活分配，不强制要求必须有female_lead）", "description": "", "core_desire": "", "weakness": "", "secret": "", "image_prompt": "中文形象提示词，格式：'年龄性别，面部特征，发型发色，服装配饰，气质神态，背景环境，写实风格，高清，电影质感'" }],
   "relations": [{ "from_name": "", "to_name": "", "relation_type": "", "faction": "", "interest_link": "", "emotion_link": "", "description": "" }],
   "plot_control": { "main_storyline": "", "outline_summary": "" },
   "volumes": [{ "volume_number": 1, "title": "", "goal": "", "summary": "" }],
