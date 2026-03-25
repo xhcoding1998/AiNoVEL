@@ -8,7 +8,6 @@ import { useAIRegenerate } from '../../composables/useAIRegenerate'
 import { useCascadeRegenerate } from '../../composables/useCascadeRegenerate'
 import VInput from '../ui/VInput.vue'
 import VTextarea from '../ui/VTextarea.vue'
-import VSelect from '../ui/VSelect.vue'
 import VButton from '../ui/VButton.vue'
 import VCard from '../ui/VCard.vue'
 import VAccordionItem from '../ui/VAccordionItem.vue'
@@ -39,13 +38,6 @@ const saving = ref(false)
 const pid = route.params.id
 const openSections = ref({ core_selling_point: false, one_line_summary: false, target_readers: false })
 
-const genreOptions = [
-  '都市', '玄幻', '仙侠', '科幻', '悬疑', '言情', '历史', '军事', '游戏', '体育', '灵异', '二次元', '其他'
-].map(v => ({ label: v, value: v }))
-
-const styleOptions = [
-  '轻松搞笑', '热血爽文', '细腻文艺', '暗黑压抑', '悬疑烧脑', '甜宠', '虐恋', '硬核写实', '其他'
-].map(v => ({ label: v, value: v }))
 
 async function loadData() {
   await store.fetchBasicInfo(pid)
@@ -100,8 +92,8 @@ function handleRegenClick() {
     <div class="form-grid">
       <VInput v-model="form.book_name" label="书名" placeholder="你的小说名称" />
       <div class="form-row">
-        <VSelect v-model="form.genre" label="题材" :options="genreOptions" />
-        <VSelect v-model="form.style" label="风格" :options="styleOptions" />
+        <VInput v-model="form.genre" label="题材" placeholder="如：玄幻、都市、仙侠、科幻..." />
+        <VInput v-model="form.style" label="风格" placeholder="如：热血爽文、轻松搞笑、暗黑压抑..." />
       </div>
       <div class="accordion-list">
         <VAccordionItem title="核心卖点" :open="openSections.core_selling_point" @toggle="openSections.core_selling_point = !openSections.core_selling_point">
