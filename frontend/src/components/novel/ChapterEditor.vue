@@ -202,29 +202,50 @@ async function switchVolume(vid) {
   await store.fetchChapters(pid, vid)
 }
 
-// expandedChapterId: 当前展开的章节 id，null=无，'new'=新建
+// expandedChapterId: 当前展开预览的章节 id
 const expandedChapterId = ref(null)
-const chDetailTab = ref('content') // 'content' | 'storyboard'
+// 章节编辑弹窗
+const showChapterModal = ref(false)
 
 function openCreate() {
-  chapterForm.value = { id: null, volume_id: selectedVolume.value, chapter_number: (store.chapters.length || 0) + 1, title: '', content: '', status: 'draft' }
-  expandedChapterId.value = expandedChapterId.value === 'new' ? null : 'new'
-  chDetailTab.value = 'content'
+  chapterForm.value = { id: null, volume_id: selectedVolume.value, chapter_number: (store.chapters.length || 0) + 1, title: '', content: '', status: 'draft', storyboard_text: '' }
+  showChapterModal.value = true
 }
 
 function openEdit(ch) {
+  // 点击行：切换预览折叠
   if (expandedChapterId.value === ch.id) {
     expandedChapterId.value = null
   } else {
-    chapterForm.value = { ...ch }
     expandedChapterId.value = ch.id
-    chDetailTab.value = 'content'
   }
+}
+
+function openChapterModal(ch) {
+  // 打开编辑弹窗，带上分镜
+  chapterForm.value = { ...ch, storyboard_text: ch.storyboard_text || '' }
+  showChapterModal.value = true
+}
+
+async function saveChapterFromModal() {
+  saving.value = true
+  try {
+    await store.saveChapter(pid, chapterForm.value)
+    // 如果分镜有改动也一并保存
+    if (chapterForm.value.id && chapterForm.value.storyboard_text !== undefined) {
+      const idx = store.chapters.findIndex(c => c.id === chapterForm.value.id)
+      if (idx !== -1) store.chapters[idx] = { ...store.chapters[idx], storyboard_text: chapterForm.value.storyboard_text }
+      await aiApi.saveStoryboards(pid, chapterForm.value.id, chapterForm.value.storyboard_text)
+    }
+    toast.success('已保存')
+    showChapterModal.value = false
+  } catch { toast.error('保存失败') }
+  finally { saving.value = false }
 }
 
 async function saveChapter() {
   saving.value = true
-  try { await store.saveChapter(pid, chapterForm.value); toast.success('已保存'); expandedChapterId.value = null }
+  try { await store.saveChapter(pid, chapterForm.value); toast.success('已保存'); showChapterModal.value = false }
   catch { toast.error('保存失败') }
   finally { saving.value = false }
 }
@@ -688,78 +709,40 @@ const totalWords = computed(() => {
             </div>
           </div>
 
-          <!-- 展开详情面板：内容 + 分镜 Tab -->
+          <!-- 展开预览面板（只读，紧凑） -->
           <Transition name="collapse">
-            <div v-if="expandedChapterId === ch.id" class="ch-detail">
-              <!-- Tab 切换 -->
-              <div class="ch-detail__tabs">
-                <button
-                  class="ch-detail__tab"
-                  :class="{ 'ch-detail__tab--active': chDetailTab === 'content' }"
-                  @click.stop="chDetailTab = 'content'"
-                >
-                  <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1" y="1" width="12" height="12" rx="2"/><path d="M3 4h8M3 7h6M3 10h4" stroke-linecap="round"/></svg>
-                  章节内容
-                </button>
-                <button
-                  class="ch-detail__tab"
-                  :class="{ 'ch-detail__tab--active': chDetailTab === 'storyboard' }"
-                  @click.stop="chDetailTab = 'storyboard'"
-                >
-                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="3" width="9" height="7" rx="1"/><path d="M10 6.5l4-2v5l-4-2v-1z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <div v-if="expandedChapterId === ch.id" class="ch-preview" @click.stop>
+              <!-- 章节内容预览 -->
+              <div class="ch-preview__content">
+                <p v-if="ch.content" class="ch-preview__text">{{ ch.content }}</p>
+                <p v-else class="ch-preview__empty">暂无内容，点击「编辑」填写章节内容</p>
+              </div>
+              <!-- 分镜预览（有则展示前几行） -->
+              <div v-if="ch.storyboard_text" class="ch-preview__storyboard">
+                <span class="ch-preview__storyboard-label">
+                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="3" width="9" height="7" rx="1"/><path d="M10 6.5l4-2v5l-4-2v-1z" stroke-linecap="round" stroke-linejoin="round"/></svg>
                   分镜脚本
-                  <span v-if="ch.storyboard_text" class="ch-detail__tab-dot" />
-                </button>
+                </span>
+                <p class="ch-preview__storyboard-text">{{ ch.storyboard_text.slice(0, 200) }}{{ ch.storyboard_text.length > 200 ? '…' : '' }}</p>
               </div>
-
-              <!-- 内容编辑 -->
-              <div v-if="chDetailTab === 'content'" class="ch-detail__body">
-                <div class="ch-detail__meta-row">
-                  <VInput v-model.number="chapterForm.chapter_number" label="章节号" type="number" style="width:90px;flex-shrink:0" />
-                  <VInput v-model="chapterForm.title" label="章节标题" placeholder="章节标题" style="flex:1" />
-                  <VSelect v-model="chapterForm.status" label="状态" :options="statusOptions" style="width:120px;flex-shrink:0" />
-                </div>
-                <VTextarea v-model="chapterForm.content" label="章节内容" placeholder="在此编写章节内容..." :rows="18" noResize />
-                <div class="ch-detail__footer">
-                  <VButton variant="ghost" size="sm" :loading="aiGeneratingChapter" :disabled="isGenerating || aiGeneratingChapter" @click.stop="aiFillChapter">
-                    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0"><path d="M7 1v3M7 10v3M1 7h3M10 7h3M2.8 2.8l2.1 2.1M9.1 9.1l2.1 2.1M11.2 2.8l-2.1 2.1M4.9 9.1l-2.1 2.1" stroke-linecap="round"/></svg>
-                    AI 填充
-                  </VButton>
-                  <div style="display:flex;gap:8px">
-                    <VButton variant="secondary" size="sm" @click.stop="expandedChapterId = null">收起</VButton>
-                    <VButton variant="primary" size="sm" :loading="saving" :disabled="isGenerating" @click.stop="saveChapter">保存</VButton>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 分镜脚本 -->
-              <div v-if="chDetailTab === 'storyboard'" class="ch-detail__body">
-                <div v-if="!ch.storyboard_text && !generatingStoryboardMap[ch.id]" class="ch-detail__storyboard-empty">
-                  <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><rect x="2" y="6" width="18" height="14" rx="2" stroke="var(--text-tertiary)" stroke-width="1.5"/><path d="M20 13l8-4v10l-8-4v-2z" stroke="var(--text-tertiary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  <p>尚未生成分镜脚本</p>
-                  <VButton variant="secondary" size="sm" :loading="generatingStoryboardMap[ch.id]" :disabled="hasAnyGenerating" @click.stop="generateStoryboards(ch)">
-                    AI 生成分镜
+              <!-- 底部操作栏 -->
+              <div class="ch-preview__footer">
+                <div class="ch-preview__footer-left">
+                  <VButton v-if="isOutlineOnly(ch) && !isChapterGenerating(ch.id)" variant="ghost" size="sm" :disabled="hasAnyGenerating" @click="generateContent(ch)">AI 写正文</VButton>
+                  <VButton
+                    variant="ghost" size="sm"
+                    :loading="generatingStoryboardMap[ch.id]"
+                    :disabled="hasAnyGenerating && !generatingStoryboardMap[ch.id]"
+                    @click="generateStoryboards(ch)"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="flex-shrink:0"><rect x="1" y="3" width="9" height="7" rx="1"/><path d="M10 6.5l4-2v5l-4-2v-1z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    {{ ch.storyboard_text ? '重新生成分镜' : 'AI 写分镜' }}
                   </VButton>
                 </div>
-                <template v-else>
-                  <textarea
-                    class="ch-storyboard-textarea"
-                    v-model="ch.storyboard_text"
-                    @click.stop
-                    rows="20"
-                    placeholder="分镜脚本内容..."
-                  />
-                  <div class="ch-detail__footer">
-                    <VButton variant="ghost" size="sm" :loading="generatingStoryboardMap[ch.id]" :disabled="hasAnyGenerating" @click.stop="generateStoryboards(ch)">
-                      <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0"><path d="M7 1v3M7 10v3M1 7h3M10 7h3M2.8 2.8l2.1 2.1M9.1 9.1l2.1 2.1M11.2 2.8l-2.1 2.1M4.9 9.1l-2.1 2.1" stroke-linecap="round"/></svg>
-                      重新生成
-                    </VButton>
-                    <div style="display:flex;gap:8px">
-                      <VButton variant="secondary" size="sm" @click.stop="expandedChapterId = null">收起</VButton>
-                      <VButton variant="primary" size="sm" :loading="savingStoryboardMap[ch.id]" @click.stop="saveStoryboard(ch)">保存分镜</VButton>
-                    </div>
-                  </div>
-                </template>
+                <VButton variant="primary" size="sm" @click="openChapterModal(ch)">
+                  <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0"><path d="M8.5 2.5l3 3M2 9l6-6 3 3-6 6H2V9z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  编辑
+                </VButton>
               </div>
             </div>
           </Transition>
@@ -776,6 +759,34 @@ const totalWords = computed(() => {
         </VButton>
       </div>
     </template>
+
+    <!-- 章节编辑弹窗 -->
+    <VDrawer v-model="showChapterModal" :title="chapterForm.id ? `编辑：${chapterForm.title || '章节'}` : '新建章节'" width="680px">
+      <div class="ch-modal-form">
+        <div class="ch-modal-meta">
+          <VInput v-model.number="chapterForm.chapter_number" label="章节号" type="number" style="width:90px;flex-shrink:0" />
+          <VInput v-model="chapterForm.title" label="章节标题" placeholder="章节标题" style="flex:1" />
+          <VSelect v-model="chapterForm.status" label="状态" :options="statusOptions" style="width:120px;flex-shrink:0" />
+        </div>
+        <VTextarea v-model="chapterForm.content" label="章节内容" placeholder="在此编写章节内容..." :rows="22" noResize />
+        <!-- 分镜脚本（如有） -->
+        <div v-if="chapterForm.storyboard_text !== undefined" class="ch-modal-storyboard">
+          <label class="ch-modal-storyboard__label">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="3" width="9" height="7" rx="1"/><path d="M10 6.5l4-2v5l-4-2v-1z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            分镜脚本
+          </label>
+          <textarea class="ch-storyboard-textarea" v-model="chapterForm.storyboard_text" rows="14" placeholder="分镜脚本内容..." />
+        </div>
+      </div>
+      <template #footer>
+        <VButton variant="ghost" size="sm" :loading="aiGeneratingChapter" :disabled="isGenerating || aiGeneratingChapter" @click="aiFillChapter">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0"><path d="M7 1v3M7 10v3M1 7h3M10 7h3M2.8 2.8l2.1 2.1M9.1 9.1l2.1 2.1M11.2 2.8l-2.1 2.1M4.9 9.1l-2.1 2.1" stroke-linecap="round"/></svg>
+          AI 填充
+        </VButton>
+        <VButton variant="secondary" @click="showChapterModal = false">取消</VButton>
+        <VButton variant="primary" :loading="saving" :disabled="isGenerating" @click="saveChapterFromModal">保存</VButton>
+      </template>
+    </VDrawer>
 
     <VConfirmModal
       v-model="confirmDelete.show"
@@ -1266,78 +1277,113 @@ const totalWords = computed(() => {
   50% { opacity: 1; transform: scale(1.2); }
 }
 
-/* 展开详情面板 */
-.ch-detail {
+/* 只读预览面板 */
+.ch-preview {
   border-top: 1px solid var(--border-default);
-  background: var(--bg-tertiary);
-}
-
-.ch-detail__tabs {
-  display: flex;
-  gap: 0;
-  border-bottom: 1px solid var(--border-default);
-  background: var(--bg-secondary);
-  padding: 0 16px;
-}
-
-.ch-detail__tab {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 14px;
-  font-size: 13px;
-  color: var(--text-tertiary);
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  position: relative;
-  margin-bottom: -1px;
-}
-.ch-detail__tab:hover { color: var(--text-primary); }
-.ch-detail__tab--active {
-  color: var(--text-primary);
-  border-bottom-color: var(--accent-blue);
-  font-weight: 500;
-}
-
-.ch-detail__tab-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent-purple);
-  flex-shrink: 0;
-}
-
-.ch-detail__body {
-  padding: 16px;
+  background: var(--bg-nested);
+  padding: 12px 16px 10px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
-.ch-detail__meta-row {
+.ch-preview__content {
+  min-height: 0;
+}
+
+.ch-preview__text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.65;
+  white-space: pre-wrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.ch-preview__empty {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+.ch-preview__storyboard {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--accent-purple-subtle);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(139, 92, 246, 0.15);
+}
+
+.ch-preview__storyboard-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-purple);
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.ch-preview__storyboard-text {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.ch-preview__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 4px;
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 4px;
+}
+
+.ch-preview__footer-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 章节编辑弹窗内表单 */
+.ch-modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ch-modal-meta {
   display: flex;
   gap: 12px;
   align-items: flex-end;
 }
 
-.ch-detail__footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-top: 4px;
-}
-
-.ch-detail__storyboard-empty {
+.ch-modal-storyboard {
   display: flex;
   flex-direction: column;
+  gap: 8px;
+}
+
+.ch-modal-storyboard__label {
+  display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 40px 0;
-  color: var(--text-tertiary);
-  font-size: 13px;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-purple);
 }
 
 .ch-storyboard-textarea {
@@ -1354,7 +1400,7 @@ const totalWords = computed(() => {
   white-space: pre-wrap;
   box-sizing: border-box;
   transition: border-color var(--transition-fast);
-  min-height: 300px;
+  min-height: 200px;
 }
 .ch-storyboard-textarea:focus {
   outline: none;
