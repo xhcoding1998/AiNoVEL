@@ -198,11 +198,13 @@ IP 改编铁律：
 6. 必须保留：${ipAnalysis.must_preserve || '核心人物关系与世界观'}`
 }
 
-export function buildStepPrompt(step, userPrompt, existingMaterial) {
+export function buildStepPrompt(step, userPrompt, existingMaterial, artStyle = 'realistic') {
+  if (step === 'characters') {
+    return buildCharactersPrompt(userPrompt, existingMaterial, artStyle)
+  }
   const builders = {
     basic_info: buildBasicInfoPrompt,
     world_building: buildWorldBuildingPrompt,
-    characters: buildCharactersPrompt,
     relations: buildRelationsPrompt,
     plot_control: buildPlotControlPrompt,
     volumes: buildVolumesPrompt,
@@ -288,7 +290,50 @@ JSON 结构：
 5. 若为 IP 改编：era_setting 必须以原作时代为基础进行扩展而非重新编造；power_structure 以原作势力为基础（如天庭、佛门、妖族等）可新增但不能矛盾；rules 延续原作力量体系和规则逻辑；social_atmosphere 还原原作的社会文化特征${contextBlock(existing)}`
 }
 
-function buildCharactersPrompt(userPrompt, existing) {
+// 画风风格关键词映射
+const ART_STYLE_MAP = {
+  'cn_anime':    { label: '国漫', keywords: '3D国风动漫，玉润质感，细腻皮肤，柔和冷调光影，高精度建模，影视级渲染，国风美学，东方神韵', bg: '纯白或淡雅水墨背景' },
+  'jp_anime':    { label: '日漫', keywords: '日式动漫风格，精致二次元，清晰线条，鲜明色彩，赛璐璐着色，动漫质感，高饱和度，干净背景', bg: '简洁纯色或渐变背景' },
+  'realistic':   { label: '真人写实', keywords: '写实风格，电影质感，8K超清，自然光影，史诗感，强烈明暗对比，摄影级细节，皮肤毛孔可见', bg: '电影级场景背景，环境光真实' },
+  'comic':       { label: '漫画', keywords: '美式漫画风格，粗犷线条，强烈阴影，英雄主义构图，对比强烈，漫画质感，动态感强', bg: '漫画分格或纯色背景' },
+  'ink_wash':    { label: '水墨国画', keywords: '中国水墨画风，写意笔触，墨色晕染，留白美学，古典意境，宣纸质感，东方哲学美学', bg: '宣纸白底，水墨晕染' },
+  'pixel':       { label: '像素风', keywords: '像素艺术风格，8-bit/16-bit，复古游戏美学，清晰像素块，鲜明色块，怀旧感', bg: '像素化背景' },
+  'cyberpunk':   { label: '赛博朋克', keywords: '赛博朋克风格，霓虹灯光，科技感，暗色调，未来都市，金属质感，荧光色彩，数字雨效果', bg: '未来都市夜景，霓虹背景' },
+  'fantasy':     { label: '奇幻插画', keywords: '奇幻插画风格，魔法光效，史诗感，精细细节，油画质感，华丽色彩，神秘氛围', bg: '奇幻场景，魔法光晕' },
+}
+
+function getArtStyleHint(artStyle) {
+  const style = ART_STYLE_MAP[artStyle] || ART_STYLE_MAP['realistic']
+  return { ...style, key: artStyle }
+}
+
+function buildImagePromptInstruction(artStyle) {
+  const style = getArtStyleHint(artStyle)
+  return `角色形象提示词（中文，300字以上，专为AI绘图/视频生成，画风为【${style.label}】风格。
+
+必须严格按以下结构输出，每项都要有具体细节，禁止笼统抽象：
+
+第一行：角色名 + 画风定位
+格式：「角色名：[角色名]，${style.keywords}，[角色气质关键词]」
+
+第二段：五官特征（必须详细）
+格式：「五官特征：脸型（如偏长刀削脸/圆润鹅蛋脸），眉型（如剑眉英挺/柳叶眉），眼型眼色（如细长眼尾微挑/杏眼水润），瞳色，鼻梁，唇形，下颌线，肤色，标志性印记或特征」
+
+第三段：体型气质
+格式：「[年龄]，身形[体型描述]，气质[气质描述]，眼神[眼神描述]」
+
+第四段：服装配饰（必须详细）
+格式：「穿着[服装颜色材质款式]，[配饰1]，[配饰2]，[标志性道具]，布料[质感描述]」
+
+第五段：构图说明（三视图或特写）
+格式：「画面分三区域：左侧人物[视图描述]；上侧[近景特写描述]；右下[细节展示]」
+
+画风关键词结尾：${style.keywords}，${style.bg}，高精度，影视级质量
+
+⚠️ 必须在第一行写出角色名，必须符合【${style.label}】画风，禁止生成暗黑丧尸风格，角色形象必须符合其在故事中的实际人设（如唐僧应是白衣温润形象，孙悟空应是灵动矫健形象，不应生成阴暗破败的形象）`
+}
+
+function buildCharactersPrompt(userPrompt, existing, artStyle = 'realistic') {
   const existingChars = existing?.characters || []
   const hasExisting = existingChars.length > 0
 
@@ -332,8 +377,13 @@ ${projectContext.join('\n')}
 你可以重新诠释角色的细节，但核心设定必须与项目的世界观和剧情方向保持一致。${userPrompt ? `\n\n用户补充要求：${userPrompt}` : ''}`
   }
 
+  const imagePromptInstruction = buildImagePromptInstruction(artStyle)
+
   return `你是一位角色塑造专家，擅长设计立体、有魅力、有记忆点的小说角色。请根据用户提示词和已有物料，设计完整的角色群像。
 ${buildIPAwareHint(existing)}${modeInstruction}
+
+⚠️【画风设定】本项目画风为：${getArtStyleHint(artStyle).label}（${getArtStyleHint(artStyle).keywords}）
+所有角色的 image_prompt 必须严格符合此画风，禁止生成与画风不符的描述。
 
 ${JSON_RULE}
 
@@ -347,7 +397,7 @@ JSON 结构：
       "core_desire": "核心欲望（100字以上，不是表面目标而是深层心理需求，如'不是想变强，而是恐惧再次失去'）",
       "weakness": "致命弱点（100字以上，必须是真正能造成困境的弱点，而非无关痛痒的小毛病。包括：弱点来源、如何被敌人利用、对剧情的影响）",
       "secret": "核心秘密（100字以上，一个能在关键时刻引爆剧情的秘密，包括：秘密的来龙去脉、谁知道这个秘密、暴露后的冲击力）",
-      "image_prompt": "角色形象提示词（中文，200字以上，专为AI绘图/视频生成设计。必须按以下维度逐一展开描写，每项都要具体细节，禁止笼统抽象：①年龄与性别（如'约25岁男性，身高约180cm，体型修长'）②面部特征（五官细节：眼型眼色、鼻梁、嘴唇、下颌线、肤色、标志性印记或疤痕）③发型发色（长短、造型、颜色、质感，如'墨黑长发束于脑后，鬓角有几缕散落'）④服装（材质、颜色、款式、层次，如'外穿白色棉麻僧袍，内衬灰色中衣，腰系麻绳，衣摆有风尘痕迹'）⑤配饰道具（如'左手持九环锡杖，颈挂108颗沉香木佛珠，袖口绣有金色梵文'）⑥气质神态（情绪状态、眼神、姿态，如'眼神坚定而悲悯，嘴角微抿，站姿笔直如松'）⑦背景环境（场景氛围，如'黄昏时分的古代官道，远处是连绵山脉，地面有薄薄晨雾'）⑧画风关键词（如'写实风格，电影质感，8K超清，自然光影，史诗感'）。示例格式：'约25岁男性，身高修长，面容清俊冷峻，剑眉星目，眼中有金色光芒隐现，肤色白皙，眉心有金色舍利印记，墨黑长发束于脑后，几缕发丝垂落面颊；身着白色棉麻僧袍，外披灰色袈裟，腰系麻绳，右手持九环锡杖，颈挂108颗沉香木佛珠；神情坚毅而慈悲，目视远方，站于黄昏古道之上，背后是连绵青山与落日余晖，写实风格，电影质感，8K超清，史诗感'）"
+      "image_prompt": "${imagePromptInstruction}"
     }
   ]
 }
@@ -360,7 +410,8 @@ JSON 结构：
 5. 主角不能完美无缺，弱点要真正影响剧情
 6. 反派要有令人共情甚至认同的一面，不要脸谱化
 7. 配角不是工具人，要有自己的目标线和成长弧
-8. role_type 说明：male_lead（男主）、female_lead（女主）、supporting（配角，有独立目标线和成长弧）、antagonist（反派，有令人共情的一面）、minor（龙套，功能性角色，如店小二、路人甲、信使等，description 可适当简短）；IP 改编时按角色在本作中的实际定位分配，不必强套男主/女主模板${contextBlock(existing)}`
+8. role_type 说明：male_lead（男主）、female_lead（女主）、supporting（配角，有独立目标线和成长弧）、antagonist（反派，有令人共情的一面）、minor（龙套，功能性角色，如店小二、路人甲、信使等，description 可适当简短）；IP 改编时按角色在本作中的实际定位分配，不必强套男主/女主模板
+9. ⚠️【形象铁律】image_prompt 必须符合角色在故事中的实际人设：唐僧→白衣温润僧侣形象；孙悟空→灵动矫健猴王形象；正面角色→符合其性格气质的正面形象；禁止把正面角色生成暗黑丧尸破败风格！${contextBlock(existing)}`
 }
 
 function buildRelationsPrompt(userPrompt, existing) {
@@ -530,21 +581,35 @@ JSON 结构：
 
 // ---------- Storyboard prompt ----------
 
-export function buildStoryboardPrompt(chapter, volume, material) {
+export function buildStoryboardPrompt(chapter, volume, material, artStyle = 'realistic') {
   const parts = []
+  const styleInfo = getArtStyleHint(artStyle)
+
   if (material.basic_info) {
     parts.push(`【书名】${material.basic_info.book_name || ''}  【类型】${material.basic_info.genre || ''}  【风格】${material.basic_info.style || ''}`)
   }
+  parts.push(`【画面风格】${styleInfo.label}——${styleInfo.keywords}`)
+
   if (material.world_building?.era_setting) {
     parts.push(`【世界观】${(material.world_building.era_setting || '').slice(0, 150)}`)
   }
   if (material.characters?.length) {
-    parts.push(`【主要角色】${material.characters.filter(c => ['male_lead','female_lead','antagonist'].includes(c.role_type)).map(c => `${c.name}：${(c.image_prompt || c.description || '').slice(0, 80)}`).join('\n')}`)
+    parts.push(`【主要角色外形】${material.characters.filter(c => ['male_lead','female_lead','antagonist'].includes(c.role_type)).map(c => `${c.name}：${(c.image_prompt || c.description || '').slice(0, 100)}`).join('\n')}`)
   }
 
   const chapterContent = chapter.content || chapter.outline || ''
 
-  return `你是一位专业的影视编剧兼分镜导演，负责将小说章节改编为完整的「剧本分镜脚本」，可直接用于 AI 视频生成（Sora/Kling/可灵等）或真人拍摄。
+  // 根据画风定制画面描述风格
+  const styleGuide = {
+    'cn_anime': '画面描述需体现3D国风动漫质感：玉润皮肤、柔和光影、飘逸衣袂、国风场景氛围',
+    'jp_anime': '画面描述需体现日系动漫风格：精致线条、鲜明色彩、动漫表情、干净背景',
+    'realistic': '画面描述需体现电影写实质感：真实光影、环境细节、摄影构图、自然色调',
+    'comic': '画面描述需体现漫画风格：强烈对比、动态构图、漫画分格感、英雄主义视角',
+    'ink_wash': '画面描述需体现水墨国画风：留白意境、墨色晕染、写意笔触、古典东方美学',
+    'cyberpunk': '画面描述需体现赛博朋克风：霓虹光效、暗色调、科技感、未来都市氛围',
+  }[artStyle] || '画面描述需体现写实电影质感：真实光影、环境细节、摄影构图'
+
+  return `你是一位专业的影视编剧兼分镜导演，负责将小说章节改编为完整的「剧本分镜脚本」，可直接用于 AI 视频生成（Sora/Kling/可灵等）。
 
 ${parts.join('\n')}
 
@@ -554,6 +619,8 @@ ${parts.join('\n')}
 ${chapterContent.slice(0, 2000)}
 
 ---
+
+⚠️【画风要求】${styleGuide}。所有画面描述必须符合【${styleInfo.label}】风格，角色外貌描述必须与角色形象提示词保持一致。
 
 请将以上章节内容改编为完整的剧本分镜脚本。每个场景按以下格式输出（直接输出纯文本，不要 JSON，不要 markdown 代码块）：
 
@@ -578,7 +645,7 @@ ${chapterContent.slice(0, 2000)}
 
 格式要求：
 1. 每个场景必须有【镜头】和【画面】，有对话的场景加【对话】，有音效的加【音效】
-2. 【画面】要具体可执行：角色外貌/服装/动作/表情 + 环境细节 + 光线色调 + 运镜方式
+2. 【画面】要具体可执行：角色外貌/服装/动作/表情 + 环境细节 + 光线色调 + 运镜方式，且符合${styleInfo.label}画风
 3. 【对话】格式：角色名（语气/情绪）："台词内容"
 4. 景别和运镜要有变化，动作戏用跟随/环绕，情感戏用特写/固定
 5. 忠实还原原著情节，对话尽量从原文提取或贴近原文风格
@@ -605,7 +672,7 @@ JSON 结构如下:
 {
   "basic_info": { "ip_analysis": {}, "book_name": "", "genre": "", "style": "", "core_selling_point": "", "one_line_summary": "", "target_readers": "" },
   "world_building": { "era_setting": "", "power_structure": "", "rules": "", "social_atmosphere": "" },
-  "characters": [{ "name": "只写名字本身，不加任何括号说明", "role_type": "male_lead/female_lead/supporting/antagonist/minor（根据题材灵活分配，不强制要求必须有female_lead）", "description": "", "core_desire": "", "weakness": "", "secret": "", "image_prompt": "中文形象提示词，200字以上，按维度详细描写：年龄性别体型、面部五官细节（眼型眼色/鼻梁/嘴唇/肤色/标志印记）、发型发色质感、服装材质款式层次、配饰道具、气质神态眼神姿态、背景环境氛围、画风关键词（写实/电影质感/8K超清等），禁止笼统抽象，每项必须有具体细节" }],
+  "characters": [{ "name": "只写名字本身，不加任何括号说明", "role_type": "male_lead/female_lead/supporting/antagonist/minor（根据题材灵活分配，不强制要求必须有female_lead）", "description": "", "core_desire": "", "weakness": "", "secret": "", "image_prompt": "中文形象提示词，300字以上，第一行写「角色名：[名字]，[画风关键词]，[气质关键词]」；第二段写五官特征（脸型/眉型/眼型眼色/瞳色/鼻梁/唇形/下颌线/肤色/标志印记）；第三段写体型气质（年龄/身形/气质/眼神）；第四段写服装配饰（颜色材质款式/配饰道具/标志性物件）；第五段写构图（三视图或特写说明）；结尾加画风关键词。禁止暗黑丧尸风，形象必须符合角色实际人设" }],
   "relations": [{ "from_name": "", "to_name": "", "relation_type": "", "faction": "", "interest_link": "", "emotion_link": "", "description": "" }],
   "plot_control": { "main_storyline": "", "outline_summary": "" },
   "volumes": [{ "volume_number": 1, "title": "", "goal": "", "summary": "" }],

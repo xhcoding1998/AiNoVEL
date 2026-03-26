@@ -20,7 +20,18 @@ const toast = useToast()
 const showCreate = ref(false)
 const newPrompt = ref('')
 const newName = ref('')
+const newArtStyle = ref('cn_anime')
 const creating = ref(false)
+
+const artStyleOptions = [
+  { value: 'cn_anime',   label: '🎨 国漫', desc: '3D国风动漫，玉润质感，影视级渲染' },
+  { value: 'jp_anime',   label: '🌸 日漫', desc: '二次元，精致线条，动漫质感' },
+  { value: 'realistic',  label: '🎬 真人写实', desc: '电影质感，8K超清，摄影级细节' },
+  { value: 'comic',      label: '💥 漫画', desc: '美式漫画，强烈对比，动态感强' },
+  { value: 'ink_wash',   label: '🖌️ 水墨国画', desc: '写意笔触，留白意境，古典东方' },
+  { value: 'cyberpunk',  label: '🌃 赛博朋克', desc: '霓虹光效，科技感，未来都市' },
+  { value: 'fantasy',    label: '✨ 奇幻插画', desc: '魔法光效，史诗感，精细细节' },
+]
 const showDeleteConfirm = ref(false)
 const deletingProjectId = ref(null)
 const deleting = ref(false)
@@ -36,12 +47,14 @@ async function createProject() {
   try {
     const proj = await store.createProject({
       name: newName.value.trim() || undefined,
-      prompt: newPrompt.value.trim()
+      prompt: newPrompt.value.trim(),
+      art_style: newArtStyle.value
     })
     toast.success('项目已创建，AI 正在生成物料...')
     showCreate.value = false
     newPrompt.value = ''
     newName.value = ''
+    newArtStyle.value = 'cn_anime'
     router.push(`/projects/${proj.id}`)
   } catch (err) {
     toast.error(err.error || '创建失败，请检查 AI 配置')
@@ -165,20 +178,38 @@ function getGenStatus(proj) {
       <VButton variant="primary" @click="showCreate = true">创建第一个项目</VButton>
     </div>
 
-    <VModal v-model="showCreate" title="创建新项目" width="560px">
+    <VModal v-model="showCreate" title="创建新项目" width="600px">
       <div class="create-form">
         <VTextarea
           v-model="newPrompt"
           label="创作提示词"
           placeholder="描述你想写的小说，例如：&#10;写一本都市修仙小说，主角是一个程序员意外获得修仙传承，在现代都市中一边写代码一边修炼。风格要轻松搞笑，有金手指但不无脑。主角性格腹黑但重感情..."
-          :rows="6"
+          :rows="5"
         />
         <VInput
           v-model="newName"
           label="项目名称（可选）"
           placeholder="留空则由 AI 自动生成书名"
         />
-        <p class="create-hint">AI 将根据你的提示词自动生成完整的小说策划：世界观、角色、剧情大纲、人物关系等</p>
+        <!-- 画风选择 -->
+        <div class="art-style-field">
+          <label class="art-style-label">画面风格</label>
+          <p class="art-style-hint">决定角色形象提示词和分镜描述的视觉风格</p>
+          <div class="art-style-grid">
+            <button
+              v-for="opt in artStyleOptions"
+              :key="opt.value"
+              class="art-style-btn"
+              :class="{ 'art-style-btn--active': newArtStyle === opt.value }"
+              @click="newArtStyle = opt.value"
+            >
+              <span class="art-style-btn__icon">{{ opt.label.split(' ')[0] }}</span>
+              <span class="art-style-btn__name">{{ opt.label.split(' ').slice(1).join(' ') }}</span>
+              <span class="art-style-btn__desc">{{ opt.desc }}</span>
+            </button>
+          </div>
+        </div>
+        <p class="create-hint">AI 将根据你的提示词自动生成完整的小说策划：世界观、角色（含形象提示词）、剧情大纲、人物关系等</p>
       </div>
       <template #footer>
         <VButton variant="secondary" @click="showCreate = false">取消</VButton>
@@ -304,5 +335,70 @@ function getGenStatus(proj) {
   padding: var(--space-3);
   background: var(--bg-hover);
   border-radius: var(--radius-md);
+}
+
+/* 画风选择 */
+.art-style-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.art-style-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.art-style-hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin: -4px 0 0;
+}
+
+.art-style-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.art-style-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 6px;
+  background: var(--bg-secondary);
+  border: 1.5px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: center;
+}
+.art-style-btn:hover {
+  border-color: var(--accent-blue);
+  background: var(--bg-hover);
+}
+.art-style-btn--active {
+  border-color: var(--accent-blue);
+  background: rgba(59, 130, 246, 0.08);
+  box-shadow: 0 0 0 1px var(--accent-blue);
+}
+
+.art-style-btn__icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.art-style-btn__name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.art-style-btn__desc {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  line-height: 1.3;
 }
 </style>

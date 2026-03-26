@@ -44,6 +44,10 @@ async function triggerStepByStep(projectId, prompt, userConfig) {
 
   await writeLog(projectId, task.id, 'info', '开始生成小说物料...')
 
+  // 获取项目画风设置
+  const [projInfo] = await sql`SELECT art_style FROM projects WHERE id = ${projectId}`
+  const artStyle = projInfo?.art_style || 'realistic'
+
   for (let i = 0; i < GENERATION_STEPS.length; i++) {
     const step = GENERATION_STEPS[i]
     const label = STEP_LABELS[step] || step
@@ -58,7 +62,7 @@ async function triggerStepByStep(projectId, prompt, userConfig) {
         if (latest) existingMaterial = latest.content
       } catch { /* first run */ }
 
-      const systemPrompt = buildStepPrompt(step, prompt, existingMaterial)
+      const systemPrompt = buildStepPrompt(step, prompt, existingMaterial, artStyle)
       const maxTokens = (userConfig.ai_max_tokens) || STEP_MAX_TOKENS[step] || 128000
       const chunker = createChunkLogger(projectId, task.id)
       const result = await callAI(userConfig, systemPrompt, prompt, {
@@ -108,13 +112,14 @@ project.get('/:id', async (c) => {
 
 project.post('/', async (c) => {
   const userId = c.get('userId')
-  const { name, prompt } = await c.req.json()
+  const { name, prompt, art_style } = await c.req.json()
   if (!prompt && !name) return c.json({ error: '请输入创作提示词' }, 400)
 
   const projectName = name || '生成中...'
+  const artStyle = art_style || 'realistic'
   const [proj] = await sql`
-    INSERT INTO projects (user_id, name, initial_prompt, generation_status, generation_step)
-    VALUES (${userId}, ${projectName}, ${prompt || ''}, ${prompt ? 'generating' : 'idle'}, ${prompt ? 'basic_info' : null})
+    INSERT INTO projects (user_id, name, initial_prompt, art_style, generation_status, generation_step)
+    VALUES (${userId}, ${projectName}, ${prompt || ''}, ${artStyle}, ${prompt ? 'generating' : 'idle'}, ${prompt ? 'basic_info' : null})
     RETURNING *
   `
   await sql`INSERT INTO basic_info (project_id) VALUES (${proj.id})`

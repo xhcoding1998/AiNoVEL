@@ -385,7 +385,11 @@ ai.post('/:id/generate-storyboards', async (c) => {
     if (latest) material = latest.content
   } catch { /* ignore */ }
 
-  const systemPrompt = buildStoryboardPrompt(chapter, volume, material)
+  // 获取项目画风
+  const [projForStyle] = await sql`SELECT art_style FROM projects WHERE id = ${pid}`
+  const artStyle = projForStyle?.art_style || 'realistic'
+
+  const systemPrompt = buildStoryboardPrompt(chapter, volume, material, artStyle)
   const userPrompt = `请为第${volume?.volume_number || ''}卷第${chapter.chapter_number}章「${chapter.title}」生成分镜脚本`
 
   try {
@@ -835,7 +839,7 @@ JSON 结构：
   "core_desire": "核心欲望（50字以上）",
   "weakness": "致命弱点（50字以上）",
   "secret": "核心秘密（50字以上）",
-  "image_prompt": "角色形象提示词（中文，200字以上，专为AI绘图/视频生成。按维度逐一描写：①年龄性别体型 ②面部五官细节（眼型眼色、鼻梁、嘴唇、肤色、标志印记或疤痕） ③发型发色质感 ④服装材质款式层次 ⑤配饰道具 ⑥气质神态眼神姿态 ⑦背景环境氛围 ⑧画风关键词（写实/电影质感/8K超清）。禁止笼统抽象，每项必须有具体细节，可直接用于AI绘图/视频生成）"
+  "image_prompt": "角色形象提示词（中文，300字以上。第一行：「角色名：[名字]，[画风关键词]，[气质关键词]」；第二段：五官特征（脸型/眉型/眼型眼色/瞳色/鼻梁/唇形/下颌线/肤色/标志印记）；第三段：体型气质（年龄/身形/气质/眼神）；第四段：服装配饰（颜色材质款式/配饰道具/标志性物件）；第五段：构图说明（三视图或特写）；结尾加画风关键词。禁止暗黑丧尸风，形象必须符合角色实际人设）"
 }
 
 要求：
