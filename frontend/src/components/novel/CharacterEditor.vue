@@ -32,11 +32,15 @@ const dataVersion = inject('dataVersion', ref(0))
 const isGenerating = inject('isParentGenerating', ref(false))
 watch(dataVersion, () => loadData())
 
-const showEditor = ref(false)
+// expandedId: 当前展开编辑的角色 id，null 表示无；'new' 表示新建
+const expandedId = ref(null)
 const saving = ref(false)
 const aiGenerating = ref(false)
 const editForm = ref(emptyForm())
 const confirmDelete = ref({ show: false, target: null, deleting: false })
+
+// 兼容旧逻辑
+const showEditor = ref(false)
 
 const roleOptions = [
   { label: '男主', value: 'male_lead' },
@@ -59,9 +63,19 @@ async function loadData() {
 
 onMounted(loadData)
 
-function openCreate() { editForm.value = emptyForm(); showEditor.value = true }
-function openEdit(char) { editForm.value = { ...char }; showEditor.value = true }
-function closeEditor() { showEditor.value = false }
+function openCreate() {
+  editForm.value = emptyForm()
+  expandedId.value = expandedId.value === 'new' ? null : 'new'
+}
+function openEdit(char) {
+  if (expandedId.value === char.id) {
+    expandedId.value = null
+  } else {
+    editForm.value = { ...char }
+    expandedId.value = char.id
+  }
+}
+function closeEditor() { expandedId.value = null }
 
 async function saveChar() {
   if (!editForm.value.name.trim()) { toast.warning('请输入角色名'); return }
@@ -69,7 +83,7 @@ async function saveChar() {
   try {
     await store.saveCharacter(pid, editForm.value)
     toast.success('已保存')
-    showEditor.value = false
+    expandedId.value = null
     promptCascade(pid, 'characters', loadData)
   } catch { toast.error('保存失败') }
   finally { saving.value = false }
@@ -151,105 +165,124 @@ async function aiGenerateChar() {
 
 <template>
   <div>
-    <!-- 编辑面板视图 -->
-    <Transition name="panel-slide">
-      <div v-if="showEditor" class="edit-panel">
-        <div class="edit-panel__header">
-          <button class="edit-panel__back" @click="closeEditor">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-              <path d="M10 3L5 8l5 5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            返回角色列表
+    <div class="section-header">
+      <div class="section-header__left">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3">
+          <circle cx="9" cy="6" r="3.5"/><path d="M3 16c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke-linecap="round"/>
+        </svg>
+        <h3 class="section-title" style="margin:0">角色设定</h3>
+      </div>
+      <div class="flex gap-2">
+        <VButton variant="ghost" size="sm" @click="showRegenInput = !showRegenInput" :loading="regenerating" :disabled="isGenerating">
+          AI 重新生成
+        </VButton>
+        <VButton variant="primary" size="sm" @click="openCreate">添加角色</VButton>
+      </div>
+    </div>
+
+    <div v-if="showRegenInput" class="regen-bar">
+      <VInput v-model="regenPrompt" placeholder="补充指令（可选），如：增加一个亦正亦邪的角色..." />
+      <VButton variant="primary" size="sm" :loading="regenerating" :disabled="isGenerating" @click="handleRegenClick">生成</VButton>
+    </div>
+
+    <!-- 新建表单（折叠） -->
+    <Transition name="collapse">
+      <div v-if="expandedId === 'new'" class="inline-editor inline-editor--new">
+        <div class="inline-editor__header">
+          <span class="inline-editor__title">新建角色</span>
+          <button class="inline-editor__close" @click="closeEditor">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8" stroke-linecap="round"/></svg>
           </button>
-          <h3 class="edit-panel__title">{{ editForm.id ? '编辑角色' : '添加角色' }}</h3>
-          <div class="edit-panel__actions">
-            <VButton variant="ghost" size="sm" :loading="aiGenerating" :disabled="isGenerating" @click="aiGenerateChar">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0">
-                <path d="M7 1v3M7 10v3M1 7h3M10 7h3M2.8 2.8l2.1 2.1M9.1 9.1l2.1 2.1M11.2 2.8l-2.1 2.1M4.9 9.1l-2.1 2.1" stroke-linecap="round"/>
-              </svg>
-              AI 智能填充
-            </VButton>
-            <VButton variant="secondary" size="sm" @click="closeEditor">取消</VButton>
-            <VButton variant="primary" size="sm" :loading="saving" :disabled="isGenerating" @click="saveChar">保存</VButton>
-          </div>
         </div>
-        <div class="edit-panel__body">
-          <div class="edit-form-grid">
-            <div class="edit-form-row">
+        <div class="inline-editor__body">
+          <div class="inline-form-grid">
+            <div class="inline-form-row">
               <VInput v-model="editForm.name" label="角色名" placeholder="角色名称" />
               <VSelect v-model="editForm.role_type" label="角色类型" :options="roleOptions" />
             </div>
-            <VTextarea v-model="editForm.description" label="角色描述" placeholder="外貌、性格、背景简述..." :rows="4" />
-            <div class="edit-form-cols">
-              <VTextarea v-model="editForm.core_desire" label="核心欲望" placeholder="这个角色最想要什么？" :rows="4" />
-              <VTextarea v-model="editForm.weakness" label="弱点" placeholder="性格/能力上的致命弱点" :rows="4" />
+            <VTextarea v-model="editForm.description" label="角色描述" placeholder="外貌、性格、背景简述..." :rows="3" />
+            <div class="inline-form-cols">
+              <VTextarea v-model="editForm.core_desire" label="核心欲望" placeholder="这个角色最想要什么？" :rows="3" />
+              <VTextarea v-model="editForm.weakness" label="弱点" placeholder="性格/能力上的致命弱点" :rows="3" />
             </div>
-            <VTextarea v-model="editForm.secret" label="秘密" placeholder="不为人知的秘密" :rows="3" />
-            <div class="image-prompt-field">
-              <VTextarea
-                v-model="editForm.image_prompt"
-                label="形象提示词（AI 绘图/视频用）"
-                placeholder="例：25岁男性，面容俊朗清冷，白色汉服僧袍，腰系佛珠，眉心隐现金色舍利印记，气质出尘，背景为古代寺庙，写实风格，高清，电影质感"
-                :rows="4"
-              />
-              <p class="image-prompt-hint">建议包含：年龄性别、面部特征、服装配饰、气质神态、背景环境、画风（写实/动漫/水墨等）</p>
-            </div>
+            <VTextarea v-model="editForm.secret" label="秘密" placeholder="不为人知的秘密" :rows="2" />
+            <VTextarea v-model="editForm.image_prompt" label="形象提示词（AI 绘图/视频用）" placeholder="例：25岁男性，面容俊朗清冷，白色汉服僧袍..." :rows="3" />
+          </div>
+        </div>
+        <div class="inline-editor__footer">
+          <VButton variant="ghost" size="sm" :loading="aiGenerating" :disabled="isGenerating" @click="aiGenerateChar">
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0"><path d="M7 1v3M7 10v3M1 7h3M10 7h3M2.8 2.8l2.1 2.1M9.1 9.1l2.1 2.1M11.2 2.8l-2.1 2.1M4.9 9.1l-2.1 2.1" stroke-linecap="round"/></svg>
+            AI 填充
+          </VButton>
+          <div class="inline-editor__footer-right">
+            <VButton variant="secondary" size="sm" @click="closeEditor">取消</VButton>
+            <VButton variant="primary" size="sm" :loading="saving" :disabled="isGenerating" @click="saveChar">保存</VButton>
           </div>
         </div>
       </div>
     </Transition>
 
-    <!-- 列表视图 -->
-    <div v-if="!showEditor">
-      <div class="section-header">
-        <div class="section-header__left">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3">
-            <circle cx="9" cy="6" r="3.5"/><path d="M3 16c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke-linecap="round"/>
-          </svg>
-          <h3 class="section-title" style="margin:0">角色设定</h3>
-        </div>
-        <div class="flex gap-2">
-          <VButton variant="ghost" size="sm" @click="showRegenInput = !showRegenInput" :loading="regenerating" :disabled="isGenerating">
-            AI 重新生成
-          </VButton>
-          <VButton variant="primary" size="sm" @click="openCreate">添加角色</VButton>
-        </div>
-      </div>
-
-      <div v-if="showRegenInput" class="regen-bar">
-        <VInput v-model="regenPrompt" placeholder="补充指令（可选），如：增加一个亦正亦邪的角色..." />
-        <VButton variant="primary" size="sm" :loading="regenerating" :disabled="isGenerating" @click="handleRegenClick">生成</VButton>
-      </div>
-
-      <div v-if="store.characters.length" class="char-grid">
-        <VCard v-for="char in store.characters" :key="char.id" hoverable padding="sm">
-          <div class="char-card" @click="openEdit(char)">
-            <div class="char-card__top">
-              <VAvatar :name="char.name" :color="char.avatar_color" :size="38" />
-              <div class="char-card__info">
-                <span class="char-card__name" :title="char.name">{{ char.name }}</span>
-                <span class="char-card__badge">
-                  <VBadge :variant="roleVariantMap[char.role_type] || 'default'">
-                    {{ roleLabelMap[char.role_type] || char.role_type }}
-                  </VBadge>
-                </span>
-              </div>
-              <button class="char-card__del" @click.stop="deleteChar(char)">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8" stroke-linecap="round"/></svg>
-              </button>
+    <!-- 角色列表，每个卡片下方可折叠编辑 -->
+    <div v-if="store.characters.length" class="char-list">
+      <div v-for="char in store.characters" :key="char.id" class="char-item">
+        <!-- 卡片头部 -->
+        <div class="char-card" :class="{ 'char-card--expanded': expandedId === char.id }" @click="openEdit(char)">
+          <div class="char-card__top">
+            <VAvatar :name="char.name" :color="char.avatar_color" :size="36" />
+            <div class="char-card__info">
+              <span class="char-card__name" :title="char.name">{{ char.name }}</span>
+              <VBadge :variant="roleVariantMap[char.role_type] || 'default'">
+                {{ roleLabelMap[char.role_type] || char.role_type }}
+              </VBadge>
             </div>
-            <p v-if="char.description" class="char-card__desc">{{ char.description }}</p>
-            <p v-if="char.core_desire" class="char-card__tag">
-              <span class="char-card__tag-label">欲望</span>{{ char.core_desire }}
-            </p>
-            <p v-if="char.image_prompt" class="char-card__tag char-card__tag--image">
-              <span class="char-card__tag-label">形象</span>{{ char.image_prompt }}
-            </p>
+            <div class="char-card__right">
+              <p v-if="char.description" class="char-card__desc-inline">{{ char.description }}</p>
+              <div class="char-card__ops">
+                <button class="char-card__del" @click.stop="deleteChar(char)" title="删除">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8" stroke-linecap="round"/></svg>
+                </button>
+                <svg class="char-card__chevron" width="13" height="13" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4"
+                  :style="{ transform: expandedId === char.id ? 'rotate(180deg)' : 'none', transition: 'transform 0.22s' }">
+                  <path d="M2 4l4 4 4-4" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+            </div>
           </div>
-        </VCard>
+        </div>
+
+        <!-- 折叠编辑区 -->
+        <Transition name="collapse">
+          <div v-if="expandedId === char.id" class="inline-editor">
+            <div class="inline-editor__body">
+              <div class="inline-form-grid">
+                <div class="inline-form-row">
+                  <VInput v-model="editForm.name" label="角色名" placeholder="角色名称" />
+                  <VSelect v-model="editForm.role_type" label="角色类型" :options="roleOptions" />
+                </div>
+                <VTextarea v-model="editForm.description" label="角色描述" placeholder="外貌、性格、背景简述..." :rows="3" />
+                <div class="inline-form-cols">
+                  <VTextarea v-model="editForm.core_desire" label="核心欲望" placeholder="这个角色最想要什么？" :rows="3" />
+                  <VTextarea v-model="editForm.weakness" label="弱点" placeholder="性格/能力上的致命弱点" :rows="3" />
+                </div>
+                <VTextarea v-model="editForm.secret" label="秘密" placeholder="不为人知的秘密" :rows="2" />
+                <VTextarea v-model="editForm.image_prompt" label="形象提示词（AI 绘图/视频用）" placeholder="例：25岁男性，面容俊朗清冷，白色汉服僧袍..." :rows="3" />
+              </div>
+            </div>
+            <div class="inline-editor__footer">
+              <VButton variant="ghost" size="sm" :loading="aiGenerating" :disabled="isGenerating" @click="aiGenerateChar">
+                <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0"><path d="M7 1v3M7 10v3M1 7h3M10 7h3M2.8 2.8l2.1 2.1M9.1 9.1l2.1 2.1M11.2 2.8l-2.1 2.1M4.9 9.1l-2.1 2.1" stroke-linecap="round"/></svg>
+                AI 填充
+              </VButton>
+              <div class="inline-editor__footer-right">
+                <VButton variant="secondary" size="sm" @click="closeEditor">取消</VButton>
+                <VButton variant="primary" size="sm" :loading="saving" :disabled="isGenerating" @click="saveChar">保存</VButton>
+              </div>
+            </div>
+          </div>
+        </Transition>
       </div>
-      <p v-else class="empty-text">AI 尚未生成角色，或点击"添加角色"手动创建</p>
     </div>
+    <p v-else class="empty-text">AI 尚未生成角色，或点击"添加角色"手动创建</p>
 
     <VConfirmModal
       v-model="showConfirmModal"
@@ -298,71 +331,97 @@ async function aiGenerateChar() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--space-5);
+  margin-bottom: var(--space-4);
   flex-wrap: wrap;
   gap: 12px;
 }
-
-.section-header__left {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.section-header__left svg {
-  color: var(--text-tertiary);
-}
+.section-header__left { display: flex; align-items: center; gap: var(--space-2); }
+.section-header__left svg { color: var(--text-tertiary); }
 
 .regen-bar {
   display: flex;
   gap: var(--space-2);
-  margin-bottom: var(--space-5);
-  padding-bottom: var(--space-5);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-4);
   border-bottom: 1px solid var(--border-default);
 }
-
 .regen-bar .v-input { flex: 1; }
 
-.char-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--space-3);
+/* 角色列表 */
+.char-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
 }
 
-.char-card { cursor: pointer; }
+.char-item {
+  border-bottom: 1px solid var(--border-subtle);
+}
+.char-item:last-child { border-bottom: none; }
+
+.char-card {
+  display: flex;
+  align-items: stretch;
+  cursor: pointer;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  transition: background var(--transition-fast);
+  user-select: none;
+}
+.char-card:hover { background: var(--bg-hover); }
+.char-card--expanded { background: var(--bg-active); }
 
 .char-card__top {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: 12px;
+  width: 100%;
   min-width: 0;
-}
-
-.char-card__top > *:first-child,
-.char-card__del {
-  flex-shrink: 0;
 }
 
 .char-card__info {
-  flex: 1;
-  min-width: 0;
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 8px;
+  flex-shrink: 0;
+  width: 160px;
 }
 
 .char-card__name {
-  font-family: var(--font-display);
   font-weight: 600;
   font-size: 14px;
-  letter-spacing: -0.01em;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  max-width: 90px;
+}
+
+.char-card__right {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   min-width: 0;
 }
 
-.char-card__badge {
+.char-card__desc-inline {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.char-card__ops {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   flex-shrink: 0;
 }
 
@@ -372,149 +431,105 @@ async function aiGenerateChar() {
   border-radius: var(--radius-sm);
   opacity: 0;
   transition: all var(--transition-fast);
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
 }
-
 .char-card:hover .char-card__del { opacity: 1; }
 .char-card__del:hover { color: var(--accent-red); background: var(--accent-red-subtle); }
 
-.char-card__desc {
-  margin-top: var(--space-3);
-  font-size: 13px;
-  color: var(--text-secondary);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  line-height: 1.5;
-}
-
-.char-card__tag {
-  margin-top: var(--space-2);
-  font-size: 12px;
+.char-card__chevron {
   color: var(--text-tertiary);
-  line-height: 1.4;
+  flex-shrink: 0;
 }
 
-.char-card__tag-label {
-  font-weight: 600;
-  color: var(--accent-blue);
-  margin-right: 6px;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.char-card__tag--image .char-card__tag-label {
-  color: var(--accent-green);
-}
-
-.char-card__tag--image {
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-/* 编辑面板 —— 覆盖整个内容区，带卡片层次感 */
-.edit-panel {
-  /* 用轻微不同的背景色与页面区分 */
+/* 折叠编辑区 */
+.inline-editor {
   background: var(--bg-tertiary);
+  border-top: 1px solid var(--border-default);
+}
+
+.inline-editor--new {
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-md);
+  border-radius: var(--radius-lg);
+  margin-bottom: 12px;
   overflow: hidden;
 }
 
-.edit-panel__header {
+.inline-editor__header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px 24px;
-  background: var(--bg-elevated);
+  justify-content: space-between;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--border-default);
-  flex-wrap: wrap;
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  background: var(--bg-elevated);
 }
 
-.edit-panel__back {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.inline-editor__title {
   font-size: 13px;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  padding: 5px 10px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-default);
-  transition: all var(--transition-fast);
-  background: none;
-  flex-shrink: 0;
-}
-
-.edit-panel__back:hover {
-  color: var(--text-primary);
-  border-color: var(--border-hover);
-  background: var(--bg-hover);
-}
-
-.edit-panel__title {
-  font-size: 15px;
   font-weight: 600;
-  flex: 1;
-  min-width: 0;
-  margin: 0;
+  color: var(--text-secondary);
 }
 
-.edit-panel__actions {
+.inline-editor__close {
+  color: var(--text-tertiary);
+  padding: 3px;
+  border-radius: var(--radius-sm);
+  background: none;
+  border: none;
+  cursor: pointer;
   display: flex;
   align-items: center;
+  transition: all var(--transition-fast);
+}
+.inline-editor__close:hover { color: var(--text-primary); background: var(--bg-hover); }
+
+.inline-editor__body { padding: 16px; }
+
+.inline-editor__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border-default);
+  background: var(--bg-secondary);
+}
+
+.inline-editor__footer-right {
+  display: flex;
   gap: 8px;
-  flex-shrink: 0;
 }
 
-.edit-panel__body {
-  padding: 28px 24px;
-}
-
-.edit-form-grid {
+.inline-form-grid {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
-  max-width: 760px;
-  margin: 0 auto;
-}
-
-.edit-form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
   gap: var(--space-4);
 }
 
-.edit-form-cols {
+.inline-form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
-.image-prompt-field { display: flex; flex-direction: column; gap: 6px; }
-.image-prompt-hint {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  line-height: 1.5;
-  padding: 0 2px;
+.inline-form-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
 }
 
-/* 面板切换动画 */
-.panel-slide-enter-active,
-.panel-slide-leave-active {
-  transition: opacity 0.15s ease, transform 0.15s ease;
+/* 折叠动画 */
+.collapse-enter-active,
+.collapse-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  overflow: hidden;
 }
-.panel-slide-enter-from,
-.panel-slide-leave-to {
+.collapse-enter-from,
+.collapse-leave-to {
   opacity: 0;
-  transform: translateY(6px);
+  transform: translateY(-6px);
 }
 .empty-text { color: var(--text-tertiary); text-align: center; padding: var(--space-10); font-size: 14px; }
 
