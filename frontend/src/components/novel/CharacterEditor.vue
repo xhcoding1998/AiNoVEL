@@ -14,6 +14,7 @@ import VSelect from '../ui/VSelect.vue'
 import VAvatar from '../ui/VAvatar.vue'
 import VBadge from '../ui/VBadge.vue'
 import VConfirmModal from '../ui/VConfirmModal.vue'
+import VDrawer from '../ui/VDrawer.vue'
 
 const route = useRoute()
 const store = useNovelStore()
@@ -32,15 +33,14 @@ const dataVersion = inject('dataVersion', ref(0))
 const isGenerating = inject('isParentGenerating', ref(false))
 watch(dataVersion, () => loadData())
 
-// expandedId: 当前展开编辑的角色 id，null 表示无；'new' 表示新建
+// expandedId: 当前展开预览的角色 id（null=无，char.id=展开预览）
 const expandedId = ref(null)
+// 编辑弹窗
+const showCharModal = ref(false)
 const saving = ref(false)
 const aiGenerating = ref(false)
 const editForm = ref(emptyForm())
 const confirmDelete = ref({ show: false, target: null, deleting: false })
-
-// 兼容旧逻辑
-const showEditor = ref(false)
 
 const roleOptions = [
   { label: '男主', value: 'male_lead' },
@@ -65,17 +65,23 @@ onMounted(loadData)
 
 function openCreate() {
   editForm.value = emptyForm()
-  expandedId.value = expandedId.value === 'new' ? null : 'new'
+  showCharModal.value = true
 }
+
+function togglePreview(char) {
+  // chevron：展开/收起只读预览
+  expandedId.value = expandedId.value === char.id ? null : char.id
+}
+
 function openEdit(char) {
-  if (expandedId.value === char.id) {
-    expandedId.value = null
-  } else {
-    editForm.value = { ...char }
-    expandedId.value = char.id
-  }
+  // 点击卡片行：弹出编辑弹窗
+  editForm.value = { ...char }
+  showCharModal.value = true
 }
-function closeEditor() { expandedId.value = null }
+
+function closeEditor() {
+  showCharModal.value = false
+}
 
 async function saveChar() {
   if (!editForm.value.name.trim()) { toast.warning('请输入角色名'); return }
@@ -83,7 +89,7 @@ async function saveChar() {
   try {
     await store.saveCharacter(pid, editForm.value)
     toast.success('已保存')
-    expandedId.value = null
+    showCharModal.value = false
     promptCascade(pid, 'characters', loadData)
   } catch { toast.error('保存失败') }
   finally { saving.value = false }
@@ -185,47 +191,10 @@ async function aiGenerateChar() {
       <VButton variant="primary" size="sm" :loading="regenerating" :disabled="isGenerating" @click="handleRegenClick">生成</VButton>
     </div>
 
-    <!-- 新建表单（折叠） -->
-    <Transition name="collapse">
-      <div v-if="expandedId === 'new'" class="inline-editor inline-editor--new">
-        <div class="inline-editor__header">
-          <span class="inline-editor__title">新建角色</span>
-          <button class="inline-editor__close" @click="closeEditor">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8" stroke-linecap="round"/></svg>
-          </button>
-        </div>
-        <div class="inline-editor__body">
-          <div class="inline-form-grid">
-            <div class="inline-form-row">
-              <VInput v-model="editForm.name" label="角色名" placeholder="角色名称" />
-              <VSelect v-model="editForm.role_type" label="角色类型" :options="roleOptions" />
-            </div>
-            <VTextarea v-model="editForm.description" label="角色描述" placeholder="外貌、性格、背景简述..." :rows="3" />
-            <div class="inline-form-cols">
-              <VTextarea v-model="editForm.core_desire" label="核心欲望" placeholder="这个角色最想要什么？" :rows="3" />
-              <VTextarea v-model="editForm.weakness" label="弱点" placeholder="性格/能力上的致命弱点" :rows="3" />
-            </div>
-            <VTextarea v-model="editForm.secret" label="秘密" placeholder="不为人知的秘密" :rows="2" />
-            <VTextarea v-model="editForm.image_prompt" label="形象提示词（AI 绘图/视频用）" placeholder="例：25岁男性，面容俊朗清冷，白色汉服僧袍..." :rows="3" />
-          </div>
-        </div>
-        <div class="inline-editor__footer">
-          <VButton variant="ghost" size="sm" :loading="aiGenerating" :disabled="isGenerating" @click="aiGenerateChar">
-            <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0"><path d="M7 1v3M7 10v3M1 7h3M10 7h3M2.8 2.8l2.1 2.1M9.1 9.1l2.1 2.1M11.2 2.8l-2.1 2.1M4.9 9.1l-2.1 2.1" stroke-linecap="round"/></svg>
-            AI 填充
-          </VButton>
-          <div class="inline-editor__footer-right">
-            <VButton variant="secondary" size="sm" @click="closeEditor">取消</VButton>
-            <VButton variant="primary" size="sm" :loading="saving" :disabled="isGenerating" @click="saveChar">保存</VButton>
-          </div>
-        </div>
-      </div>
-    </Transition>
-
-    <!-- 角色列表，每个卡片下方可折叠编辑 -->
+    <!-- 角色列表 -->
     <div v-if="store.characters.length" class="char-list">
       <div v-for="char in store.characters" :key="char.id" class="char-item">
-        <!-- 卡片头部 -->
+        <!-- 卡片行：点击整行弹出编辑弹窗，chevron 控制预览折叠 -->
         <div class="char-card" :class="{ 'char-card--expanded': expandedId === char.id }" @click="openEdit(char)">
           <div class="char-card__top">
             <VAvatar :name="char.name" :color="char.avatar_color" :size="36" />
@@ -241,48 +210,85 @@ async function aiGenerateChar() {
                 <button class="char-card__del" @click.stop="deleteChar(char)" title="删除">
                   <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8" stroke-linecap="round"/></svg>
                 </button>
-                <svg class="char-card__chevron" width="13" height="13" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4"
-                  :style="{ transform: expandedId === char.id ? 'rotate(180deg)' : 'none', transition: 'transform 0.22s' }">
-                  <path d="M2 4l4 4 4-4" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
+                <!-- chevron 独立控制折叠预览，阻止冒泡 -->
+                <button class="char-card__chevron-btn" @click.stop="togglePreview(char)" :title="expandedId === char.id ? '收起' : '展开预览'">
+                  <svg width="13" height="13" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4"
+                    :style="{ transform: expandedId === char.id ? 'rotate(180deg)' : 'none', transition: 'transform 0.22s' }">
+                    <path d="M2 4l4 4 4-4" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- 折叠编辑区 -->
+        <!-- 折叠只读预览区 -->
         <Transition name="collapse">
-          <div v-if="expandedId === char.id" class="inline-editor">
-            <div class="inline-editor__body">
-              <div class="inline-form-grid">
-                <div class="inline-form-row">
-                  <VInput v-model="editForm.name" label="角色名" placeholder="角色名称" />
-                  <VSelect v-model="editForm.role_type" label="角色类型" :options="roleOptions" />
-                </div>
-                <VTextarea v-model="editForm.description" label="角色描述" placeholder="外貌、性格、背景简述..." :rows="3" />
-                <div class="inline-form-cols">
-                  <VTextarea v-model="editForm.core_desire" label="核心欲望" placeholder="这个角色最想要什么？" :rows="3" />
-                  <VTextarea v-model="editForm.weakness" label="弱点" placeholder="性格/能力上的致命弱点" :rows="3" />
-                </div>
-                <VTextarea v-model="editForm.secret" label="秘密" placeholder="不为人知的秘密" :rows="2" />
-                <VTextarea v-model="editForm.image_prompt" label="形象提示词（AI 绘图/视频用）" placeholder="例：25岁男性，面容俊朗清冷，白色汉服僧袍..." :rows="3" />
+          <div v-if="expandedId === char.id" class="char-preview" @click.stop>
+            <div class="char-preview__grid">
+              <div v-if="char.description" class="char-preview__field char-preview__field--full">
+                <span class="char-preview__label">角色描述</span>
+                <p class="char-preview__text">{{ char.description }}</p>
+              </div>
+              <div v-if="char.core_desire" class="char-preview__field">
+                <span class="char-preview__label">核心欲望</span>
+                <p class="char-preview__text">{{ char.core_desire }}</p>
+              </div>
+              <div v-if="char.weakness" class="char-preview__field">
+                <span class="char-preview__label">弱点</span>
+                <p class="char-preview__text">{{ char.weakness }}</p>
+              </div>
+              <div v-if="char.secret" class="char-preview__field char-preview__field--full">
+                <span class="char-preview__label">秘密</span>
+                <p class="char-preview__text">{{ char.secret }}</p>
+              </div>
+              <div v-if="char.image_prompt" class="char-preview__field char-preview__field--full char-preview__field--image">
+                <span class="char-preview__label">
+                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="14" height="14" rx="2"/><circle cx="5.5" cy="5.5" r="1.5"/><path d="M1 11l4-4 3 3 2-2 5 5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  形象提示词
+                </span>
+                <p class="char-preview__text char-preview__text--prompt">{{ char.image_prompt }}</p>
+              </div>
+              <div v-if="!char.description && !char.core_desire && !char.weakness && !char.secret" class="char-preview__empty">
+                <p>暂无详细信息，点击行可进入编辑</p>
               </div>
             </div>
-            <div class="inline-editor__footer">
-              <VButton variant="ghost" size="sm" :loading="aiGenerating" :disabled="isGenerating" @click="aiGenerateChar">
-                <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0"><path d="M7 1v3M7 10v3M1 7h3M10 7h3M2.8 2.8l2.1 2.1M9.1 9.1l2.1 2.1M11.2 2.8l-2.1 2.1M4.9 9.1l-2.1 2.1" stroke-linecap="round"/></svg>
-                AI 填充
+            <div class="char-preview__footer">
+              <VButton variant="primary" size="sm" @click="openEdit(char)">
+                <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0"><path d="M8.5 2.5l3 3M2 9l6-6 3 3-6 6H2V9z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                编辑
               </VButton>
-              <div class="inline-editor__footer-right">
-                <VButton variant="secondary" size="sm" @click="closeEditor">取消</VButton>
-                <VButton variant="primary" size="sm" :loading="saving" :disabled="isGenerating" @click="saveChar">保存</VButton>
-              </div>
             </div>
           </div>
         </Transition>
       </div>
     </div>
     <p v-else class="empty-text">AI 尚未生成角色，或点击"添加角色"手动创建</p>
+
+    <!-- 角色编辑弹窗 -->
+    <VDrawer v-model="showCharModal" :title="editForm.id ? `编辑角色：${editForm.name || ''}` : '新建角色'" width="680px">
+      <div class="char-modal-form">
+        <div class="char-modal-row">
+          <VInput v-model="editForm.name" label="角色名" placeholder="角色名称" style="flex:1" />
+          <VSelect v-model="editForm.role_type" label="角色类型" :options="roleOptions" style="width:140px;flex-shrink:0" />
+        </div>
+        <VTextarea v-model="editForm.description" label="角色描述" placeholder="外貌、性格、背景简述..." :rows="4" />
+        <div class="char-modal-cols">
+          <VTextarea v-model="editForm.core_desire" label="核心欲望" placeholder="这个角色最想要什么？" :rows="4" />
+          <VTextarea v-model="editForm.weakness" label="弱点" placeholder="性格/能力上的致命弱点" :rows="4" />
+        </div>
+        <VTextarea v-model="editForm.secret" label="秘密" placeholder="不为人知的秘密" :rows="3" />
+        <VTextarea v-model="editForm.image_prompt" label="形象提示词（AI 绘图/视频用）" placeholder="例：25岁男性，面容俊朗清冷，白色汉服僧袍..." :rows="4" />
+      </div>
+      <template #footer>
+        <VButton variant="ghost" size="sm" :loading="aiGenerating" :disabled="isGenerating" @click="aiGenerateChar">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0"><path d="M7 1v3M7 10v3M1 7h3M10 7h3M2.8 2.8l2.1 2.1M9.1 9.1l2.1 2.1M11.2 2.8l-2.1 2.1M4.9 9.1l-2.1 2.1" stroke-linecap="round"/></svg>
+          AI 填充
+        </VButton>
+        <VButton variant="secondary" @click="closeEditor">取消</VButton>
+        <VButton variant="primary" :loading="saving" :disabled="isGenerating" @click="saveChar">保存</VButton>
+      </template>
+    </VDrawer>
 
     <VConfirmModal
       v-model="showConfirmModal"
@@ -445,79 +451,125 @@ async function aiGenerateChar() {
   flex-shrink: 0;
 }
 
-/* 折叠编辑区 */
-.inline-editor {
-  background: var(--bg-tertiary);
-  border-top: 1px solid var(--border-default);
+/* chevron 独立按钮 */
+.char-card__chevron-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--text-tertiary);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color var(--transition-fast), background var(--transition-fast);
+  flex-shrink: 0;
+}
+.char-card__chevron-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
 }
 
-.inline-editor--new {
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  margin-bottom: 12px;
+/* 折叠只读预览区 */
+.char-preview {
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border-default);
+  padding: 14px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.char-preview__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+}
+
+.char-preview__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.char-preview__field--full {
+  grid-column: 1 / -1;
+}
+
+.char-preview__field--image {
+  background: rgba(139, 92, 246, 0.06);
+  border: 1px solid rgba(139, 92, 246, 0.14);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+}
+
+.char-preview__label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.char-preview__field--image .char-preview__label {
+  color: var(--accent-purple);
+}
+
+.char-preview__text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-.inline-editor__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--border-default);
-  background: var(--bg-elevated);
-}
-
-.inline-editor__title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-.inline-editor__close {
+.char-preview__text--prompt {
+  font-size: 12px;
   color: var(--text-tertiary);
-  padding: 3px;
-  border-radius: var(--radius-sm);
-  background: none;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  transition: all var(--transition-fast);
-}
-.inline-editor__close:hover { color: var(--text-primary); background: var(--bg-hover); }
-
-.inline-editor__body { padding: 16px; }
-
-.inline-editor__footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 16px;
-  border-top: 1px solid var(--border-default);
-  background: var(--bg-secondary);
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
 }
 
-.inline-editor__footer-right {
-  display: flex;
-  gap: 8px;
+.char-preview__empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 16px 0;
+  font-size: 13px;
+  color: var(--text-tertiary);
+  font-style: italic;
 }
 
-.inline-form-grid {
+.char-preview__footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* 角色编辑弹窗内表单 */
+.char-modal-form {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: 16px;
 }
 
-.inline-form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-3);
+.char-modal-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
 }
 
-.inline-form-cols {
+.char-modal-cols {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--space-3);
+  gap: 12px;
 }
 
 /* 折叠动画 */
