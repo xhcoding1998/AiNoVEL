@@ -535,7 +535,8 @@ async function processStepByStep(taskId, projectId, prompt, userConfig, startIdx
         }
       }
 
-      const systemPrompt = buildStepPrompt(step, prompt, existingMaterial)
+      const [projStyle] = await sql`SELECT art_style FROM projects WHERE id = ${projectId}`
+      const systemPrompt = buildStepPrompt(step, prompt, existingMaterial, projStyle?.art_style || 'realistic')
       const userPrompt = prompt || '请根据已有物料生成本部分内容'
       const maxTokens = userConfig.ai_max_tokens || STEP_MAX_TOKENS[step] || 128000
       const chunker = createChunkLogger(projectId, taskId)
@@ -582,10 +583,10 @@ async function processSingleSection(taskId, projectId, section, prompt, userConf
       existingMaterial = material.content
     } catch { /* ignore */ }
 
-    const [proj] = await sql`SELECT initial_prompt FROM projects WHERE id = ${projectId}`
+    const [proj] = await sql`SELECT initial_prompt, art_style FROM projects WHERE id = ${projectId}`
     const initialPrompt = proj?.initial_prompt || ''
 
-    const systemPrompt = buildStepPrompt(section, prompt, existingMaterial)
+    const systemPrompt = buildStepPrompt(section, prompt, existingMaterial, proj?.art_style || 'realistic')
     let userPrompt = ''
     if (initialPrompt) {
       userPrompt += `【项目原始创作提示词（必须严格遵守此创作方向）】\n${initialPrompt}\n\n`

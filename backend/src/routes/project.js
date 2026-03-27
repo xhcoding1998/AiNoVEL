@@ -138,11 +138,12 @@ project.post('/', async (c) => {
 project.put('/:id', async (c) => {
   const userId = c.get('userId')
   const id = c.req.param('id')
-  const { name, status } = await c.req.json()
+  const { name, status, art_style } = await c.req.json()
   const [proj] = await sql`
     UPDATE projects SET
       name = COALESCE(${name || null}, name),
       status = COALESCE(${status || null}, status),
+      art_style = COALESCE(${art_style || null}, art_style),
       updated_at = NOW()
     WHERE id = ${id} AND user_id = ${userId}
     RETURNING *

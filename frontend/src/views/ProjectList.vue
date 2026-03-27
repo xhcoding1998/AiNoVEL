@@ -20,17 +20,21 @@ const toast = useToast()
 const showCreate = ref(false)
 const newPrompt = ref('')
 const newName = ref('')
-const newArtStyle = ref('cn_anime')
+const newArtStyle = ref('3D国风动漫，玉润质感，细腻皮肤，柔和冷调光影，高精度建模，影视级渲染，国风美学')
 const creating = ref(false)
 
-const artStyleOptions = [
-  { value: 'cn_anime',   label: '🎨 国漫', desc: '3D国风动漫，玉润质感，影视级渲染' },
-  { value: 'jp_anime',   label: '🌸 日漫', desc: '二次元，精致线条，动漫质感' },
-  { value: 'realistic',  label: '🎬 真人写实', desc: '电影质感，8K超清，摄影级细节' },
-  { value: 'comic',      label: '💥 漫画', desc: '美式漫画，强烈对比，动态感强' },
-  { value: 'ink_wash',   label: '🖌️ 水墨国画', desc: '写意笔触，留白意境，古典东方' },
-  { value: 'cyberpunk',  label: '🌃 赛博朋克', desc: '霓虹光效，科技感，未来都市' },
-  { value: 'fantasy',    label: '✨ 奇幻插画', desc: '魔法光效，史诗感，精细细节' },
+const artStylePresets = [
+  { label: '3D国漫', value: '3D国风动漫，玉润质感，细腻皮肤，柔和冷调光影，高精度建模，影视级渲染，国风美学' },
+  { label: '2D国漫', value: '2D国风动漫，线条流畅，色彩鲜明，水墨晕染，古风美学，高清插画' },
+  { label: '日漫', value: '日式动漫风格，精致二次元，清晰线条，鲜明色彩，赛璐璐着色，动漫质感' },
+  { label: '真人写实', value: '写实风格，电影质感，8K超清，自然光影，史诗感，摄影级细节' },
+  { label: '水墨国画', value: '中国水墨画风，写意笔触，墨色晕染，留白美学，古典意境，宣纸质感' },
+  { label: '武侠水墨', value: '武侠水墨风，古风飘逸，墨迹晕染，侠客气质，山水意境，古典东方美学' },
+  { label: '赛博朋克', value: '赛博朋克风格，霓虹灯光，科技感，暗色调，未来都市，金属质感，荧光色彩' },
+  { label: '奇幻插画', value: '奇幻插画风格，魔法光效，史诗感，精细细节，油画质感，华丽色彩，神秘氛围' },
+  { label: '美式漫画', value: '美式漫画风格，粗犷线条，强烈阴影，英雄主义构图，对比强烈，漫画质感' },
+  { label: '暗黑奇幻', value: '暗黑奇幻风格，哥特气质，阴暗色调，神秘光效，史诗感，精细细节' },
+  { label: '像素风', value: '像素艺术风格，8-bit/16-bit，复古游戏美学，清晰像素块，鲜明色块，怀旧感' },
 ]
 const showDeleteConfirm = ref(false)
 const deletingProjectId = ref(null)
@@ -54,7 +58,7 @@ async function createProject() {
     showCreate.value = false
     newPrompt.value = ''
     newName.value = ''
-    newArtStyle.value = 'cn_anime'
+    newArtStyle.value = '3D国风动漫，玉润质感，细腻皮肤，柔和冷调光影，高精度建模，影视级渲染，国风美学'
     router.push(`/projects/${proj.id}`)
   } catch (err) {
     toast.error(err.error || '创建失败，请检查 AI 配置')
@@ -193,21 +197,24 @@ function getGenStatus(proj) {
         />
         <!-- 画风选择 -->
         <div class="art-style-field">
-          <label class="art-style-label">画面风格</label>
-          <p class="art-style-hint">决定角色形象提示词和分镜描述的视觉风格</p>
-          <div class="art-style-grid">
-            <button
-              v-for="opt in artStyleOptions"
-              :key="opt.value"
-              class="art-style-btn"
-              :class="{ 'art-style-btn--active': newArtStyle === opt.value }"
-              @click="newArtStyle = opt.value"
-            >
-              <span class="art-style-btn__icon">{{ opt.label.split(' ')[0] }}</span>
-              <span class="art-style-btn__name">{{ opt.label.split(' ').slice(1).join(' ') }}</span>
-              <span class="art-style-btn__desc">{{ opt.desc }}</span>
-            </button>
+          <div class="art-style-field__header">
+            <label class="art-style-label">画面风格</label>
+            <span class="art-style-hint">影响角色形象提示词和分镜描述的视觉风格</span>
           </div>
+          <div class="art-style-presets">
+            <button
+              v-for="p in artStylePresets"
+              :key="p.value"
+              class="art-style-preset-btn"
+              :class="{ 'art-style-preset-btn--active': newArtStyle === p.value }"
+              @click="newArtStyle = p.value"
+            >{{ p.label }}</button>
+          </div>
+          <input
+            v-model="newArtStyle"
+            class="art-style-input"
+            placeholder="或直接输入自定义画风，如：3D国风动漫，玉润质感，影视级渲染..."
+          />
         </div>
         <p class="create-hint">AI 将根据你的提示词自动生成完整的小说策划：世界观、角色（含形象提示词）、剧情大纲、人物关系等</p>
       </div>
@@ -344,6 +351,12 @@ function getGenStatus(proj) {
   gap: 8px;
 }
 
+.art-style-field__header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
 .art-style-label {
   font-size: 12px;
   font-weight: 600;
@@ -351,54 +364,54 @@ function getGenStatus(proj) {
 }
 
 .art-style-hint {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-tertiary);
-  margin: -4px 0 0;
 }
 
-.art-style-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-}
-
-.art-style-btn {
+.art-style-presets {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  padding: 10px 6px;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.art-style-preset-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
   background: var(--bg-secondary);
-  border: 1.5px solid var(--border-default);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  border-radius: 20px;
   cursor: pointer;
   transition: all var(--transition-fast);
-  text-align: center;
+  white-space: nowrap;
 }
-.art-style-btn:hover {
+.art-style-preset-btn:hover {
   border-color: var(--accent-blue);
-  background: var(--bg-hover);
+  color: var(--accent-blue);
 }
-.art-style-btn--active {
+.art-style-preset-btn--active {
+  background: rgba(59, 130, 246, 0.1);
   border-color: var(--accent-blue);
-  background: rgba(59, 130, 246, 0.08);
-  box-shadow: 0 0 0 1px var(--accent-blue);
+  color: var(--accent-blue);
+  font-weight: 500;
 }
 
-.art-style-btn__icon {
-  font-size: 20px;
-  line-height: 1;
-}
-
-.art-style-btn__name {
-  font-size: 12px;
-  font-weight: 600;
+.art-style-input {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
   color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-sizing: border-box;
+  transition: border-color var(--transition-fast);
+  outline: none;
 }
-
-.art-style-btn__desc {
-  font-size: 10px;
+.art-style-input:focus {
+  border-color: var(--accent-blue);
+}
+.art-style-input::placeholder {
   color: var(--text-tertiary);
-  line-height: 1.3;
 }
 </style>

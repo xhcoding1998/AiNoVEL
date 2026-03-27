@@ -290,21 +290,41 @@ JSON 结构：
 5. 若为 IP 改编：era_setting 必须以原作时代为基础进行扩展而非重新编造；power_structure 以原作势力为基础（如天庭、佛门、妖族等）可新增但不能矛盾；rules 延续原作力量体系和规则逻辑；social_atmosphere 还原原作的社会文化特征${contextBlock(existing)}`
 }
 
-// 画风风格关键词映射
-const ART_STYLE_MAP = {
-  'cn_anime':    { label: '国漫', keywords: '3D国风动漫，玉润质感，细腻皮肤，柔和冷调光影，高精度建模，影视级渲染，国风美学，东方神韵', bg: '纯白或淡雅水墨背景' },
-  'jp_anime':    { label: '日漫', keywords: '日式动漫风格，精致二次元，清晰线条，鲜明色彩，赛璐璐着色，动漫质感，高饱和度，干净背景', bg: '简洁纯色或渐变背景' },
-  'realistic':   { label: '真人写实', keywords: '写实风格，电影质感，8K超清，自然光影，史诗感，强烈明暗对比，摄影级细节，皮肤毛孔可见', bg: '电影级场景背景，环境光真实' },
-  'comic':       { label: '漫画', keywords: '美式漫画风格，粗犷线条，强烈阴影，英雄主义构图，对比强烈，漫画质感，动态感强', bg: '漫画分格或纯色背景' },
-  'ink_wash':    { label: '水墨国画', keywords: '中国水墨画风，写意笔触，墨色晕染，留白美学，古典意境，宣纸质感，东方哲学美学', bg: '宣纸白底，水墨晕染' },
-  'pixel':       { label: '像素风', keywords: '像素艺术风格，8-bit/16-bit，复古游戏美学，清晰像素块，鲜明色块，怀旧感', bg: '像素化背景' },
-  'cyberpunk':   { label: '赛博朋克', keywords: '赛博朋克风格，霓虹灯光，科技感，暗色调，未来都市，金属质感，荧光色彩，数字雨效果', bg: '未来都市夜景，霓虹背景' },
-  'fantasy':     { label: '奇幻插画', keywords: '奇幻插画风格，魔法光效，史诗感，精细细节，油画质感，华丽色彩，神秘氛围', bg: '奇幻场景，魔法光晕' },
+// 画风预设关键词（仅用于 key 匹配的预设，用户自由输入时直接使用原文）
+const ART_STYLE_PRESETS = {
+  'cn_anime_3d':  '3D国风动漫，玉润质感，细腻皮肤，柔和冷调光影，高精度建模，影视级渲染，国风美学，东方神韵，纯白或淡雅水墨背景',
+  'cn_anime_2d':  '2D国风动漫，线条流畅，色彩鲜明，水墨晕染，古风美学，高清插画，简洁纯色背景',
+  'jp_anime':     '日式动漫风格，精致二次元，清晰线条，鲜明色彩，赛璐璐着色，动漫质感，高饱和度，简洁纯色或渐变背景',
+  'realistic':    '写实风格，电影质感，8K超清，自然光影，史诗感，强烈明暗对比，摄影级细节，皮肤毛孔可见，电影级场景背景',
+  'comic':        '美式漫画风格，粗犷线条，强烈阴影，英雄主义构图，对比强烈，漫画质感，动态感强，漫画分格或纯色背景',
+  'ink_wash':     '中国水墨画风，写意笔触，墨色晕染，留白美学，古典意境，宣纸质感，东方哲学美学，宣纸白底水墨晕染背景',
+  'pixel':        '像素艺术风格，8-bit/16-bit，复古游戏美学，清晰像素块，鲜明色块，怀旧感，像素化背景',
+  'cyberpunk':    '赛博朋克风格，霓虹灯光，科技感，暗色调，未来都市，金属质感，荧光色彩，数字雨效果，未来都市夜景霓虹背景',
+  'fantasy':      '奇幻插画风格，魔法光效，史诗感，精细细节，油画质感，华丽色彩，神秘氛围，奇幻场景魔法光晕背景',
+  'wuxia':        '武侠水墨风，古风飘逸，墨迹晕染，侠客气质，山水意境，古典东方美学，水墨山水背景',
+  'dark_fantasy': '暗黑奇幻风格，哥特气质，阴暗色调，神秘光效，史诗感，精细细节，暗色背景',
+}
+
+// 从 art_style 字符串获取画风描述（支持预设 key 和自由文本）
+function getArtStyleKeywords(artStyle) {
+  if (!artStyle) return ART_STYLE_PRESETS['realistic']
+  // 如果是预设 key，返回预设关键词
+  if (ART_STYLE_PRESETS[artStyle]) return ART_STYLE_PRESETS[artStyle]
+  // 否则直接使用用户输入的自由文本作为画风关键词
+  return artStyle
 }
 
 function getArtStyleHint(artStyle) {
-  const style = ART_STYLE_MAP[artStyle] || ART_STYLE_MAP['realistic']
-  return { ...style, key: artStyle }
+  const keywords = getArtStyleKeywords(artStyle)
+  // label 取预设名或直接用原文
+  const presetLabels = {
+    'cn_anime_3d': '3D国漫', 'cn_anime_2d': '2D国漫', 'jp_anime': '日漫',
+    'realistic': '真人写实', 'comic': '美式漫画', 'ink_wash': '水墨国画',
+    'pixel': '像素风', 'cyberpunk': '赛博朋克', 'fantasy': '奇幻插画',
+    'wuxia': '武侠水墨', 'dark_fantasy': '暗黑奇幻'
+  }
+  const label = presetLabels[artStyle] || artStyle || '自定义画风'
+  return { label, keywords, key: artStyle }
 }
 
 function buildImagePromptInstruction(artStyle) {
